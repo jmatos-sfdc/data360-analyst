@@ -1,0 +1,37 @@
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Test/coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local example output (never commit per-client data)
+examples/output/
+sample-output/
+
+# Internal-only docs (checklists, storyboards, drafts)
+local/
