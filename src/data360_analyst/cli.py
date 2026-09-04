@@ -33,6 +33,7 @@ _MODULES = {
     "provenance-extract-legacy": "data360_analyst.extract_legacy_provenance_config",
     "provenance-enrich": "data360_analyst.enrich_provenance_evidence",
     "provenance-compare": "data360_analyst.compare_provenance_reports",
+    "doctor": "data360_analyst.doctor",
 }
 
 

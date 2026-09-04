@@ -28,6 +28,33 @@ cd data360-analyst
 
 The `data360` command is a standalone CLI. The [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skills and MCP server described below are an *optional* layer on top — use them to ask questions in plain English against a live org, or run the CLI directly in a script or CI pipeline.
 
+### Ask a plain-English question — still no org
+
+`data360 analyze` prints the high-value answers straight to your terminal. `--ask` routes a plain-English question to the matching section. Against the bundled snapshot (no auth, no MCP setup):
+
+```console
+$ .venv/bin/data360 analyze --snapshot examples/demo-org --ask "which DMOs matter most"
+# Data 360 analysis — examples/demo-org
+_12 nodes (8 CI, 4 DMO), 15 edges_
+
+## Backbone DMOs (most-read)
+- Account__dlm (Account) — read by 6 artifact(s)
+- ssot__Individual__dlm (Individual) — read by 4 artifact(s)
+- SalesOrder__dlm (Sales Order) — read by 4 artifact(s)
+- Email_Unsubscribes__dlm (Email Unsubscribes) — read by 1 artifact(s)
+
+$ .venv/bin/data360 analyze --snapshot examples/demo-org --ask "suspect CIs"
+# Data 360 analysis — examples/demo-org
+_12 nodes (8 CI, 4 DMO), 15 edges_
+
+## Suspect CIs (most audit findings)
+- Customer_Order_Summary_QueryEditor__cio.sql — 4 finding(s): count_distinct, dmo_table_aliases, top_level_order_by, in_subquery_unaliased
+- Account_Parent_Hierarchy__cio.sql — 2 finding(s): dmo_table_aliases, self_joins
+- Order_Conversion_Rate__cio.sql — 2 finding(s): avg_case_nesting, join_where_duplicate_filter
+```
+
+Point it at a live org instead of `--snapshot` — `data360 analyze <alias>` — to snapshot and answer in one step. Drop `--ask` to print every section (backbone DMOs, orphans, suspect CIs, flow-to-activation).
+
 ## Why it's different
 
 - **The whole org in context, at once.** `intake.py` snapshots every DMO, CI, transform, stream, segment, and activation to local files, so Claude can reason across the entire object model in one pass — trace lineage, spot duplicated logic, find every CI that touches a field. The Data 360 app shows one object at a time with no cross-object search; there is no screen where you see it all.
@@ -348,8 +375,11 @@ Personal toolkit, used in production on real consulting engagements. Public rele
 
 ## Troubleshooting
 
+Run `data360 doctor` first — it reports your Python/sf-CLI versions, which access-token path the toolkit will use (the new `sf org auth show-access-token` vs. the legacy `sf org display` field, on either side of the [2026-05-27 sf CLI credential-redaction change](https://github.com/forcedotcom/cli/issues/3560)), and whether the Python dependencies import. Add `--org <alias>` to resolve a token end-to-end for that org (the token value is never printed).
+
 | Problem | Cause & fix |
 |---|---|
+| Unsure which auth path applies to your sf version | Run `data360 doctor` — it detects it for you instead of making you infer it from the version. |
 | `sf org display failed` or `Could not retrieve access token` | Your sf CLI session for `<alias>` has expired. Run `sf org login web --instance-url <url> --alias <alias>` to refresh. |
 | `Org does not support API v64.0+` | The org's API version is below v64. Data 360 Connect endpoints require v64.0 minimum. Contact your Salesforce admin to upgrade the org's API version, or test against a newer sandbox. |
 | MCP server not appearing in Claude Code | Run `claude mcp list` to confirm registration. If absent, re-run the `claude mcp add` command from Quick Start. The path to `python` must be absolute. |

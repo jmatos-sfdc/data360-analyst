@@ -47,6 +47,7 @@ data360-analyst/
 │   ├── compare_provenance_reports.py  Diffs two provenance configs/reports
 │   ├── export_sql_csv.py      Full DC SQL result → CSV, past the QE 1000 / ~90k single-response row caps (offset pagination)
 │   ├── mcp_server.py          Local FastMCP server wrapping /ssot/* endpoints
+│   ├── doctor.py              data360 doctor — env/auth diagnostics; reports which sf token path applies
 │   └── sf_auth.py             Shared sf CLI auth helper (handles 2026-05-27 credential-redaction change)
 ├── requirements.txt       sqlglot, pyyaml, fastmcp, markdown (pinned; pyproject.toml is the install source of truth)
 ├── examples/demo-org/     Synthetic snapshot (fake org) for trying the toolkit without a live org

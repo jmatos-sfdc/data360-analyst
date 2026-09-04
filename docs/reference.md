@@ -34,6 +34,7 @@ Every subcommand and the job it does:
 
 | Subcommand | Job | Needs a live org? |
 |---|---|---|
+| `doctor` | Report Python/sf-CLI versions, which access-token path applies, and dependency health; `--org` resolves a token end-to-end | `--org` only |
 | `demo` | Run the full pipeline on the bundled demo snapshot and open the dashboard | no |
 | `analyze` | Snapshot an org and print the answers — backbone DMOs, orphans, suspect CIs, flow-to-activation — to the terminal | yes (or `--snapshot`) |
 | `intake` | Snapshot a live org to disk (YAML sidecars + raw SQL) | yes |
