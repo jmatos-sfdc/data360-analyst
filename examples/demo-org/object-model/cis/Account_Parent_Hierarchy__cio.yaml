@@ -1,0 +1,15 @@
+apiName: Account_Parent_Hierarchy__cio
+displayName: Account Parent Hierarchy
+status: ACTIVE
+definitionType: CALCULATED_METRIC
+dataSpace: default
+dimensions:
+- apiName: account_id__c
+  type: null
+measures:
+- apiName: account_name__c
+  type: null
+- apiName: parent_name__c
+  type: null
+sqlPath: queries/Account_Parent_Hierarchy__cio.sql
+hasExpression: true

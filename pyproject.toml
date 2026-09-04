@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data360-analyst"
+version = "0.1.0"
+description = "Toolkit for analyzing Salesforce Data Cloud (Data 360) orgs"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "sqlglot>=30.0.0",
+    "pyyaml>=6.0",
+    "fastmcp>=3.0.0",
+    "markdown>=3.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+data360 = "data360_analyst.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

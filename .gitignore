@@ -1,0 +1,49 @@
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Test/coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local example output (never commit per-client data)
+examples/output/
+sample-output/
+
+# Internal-only docs (checklists, storyboards, drafts)
+local/
+
+# Demo scripts — may reference client-specific findings
+demos/
+
+# Local Claude Code harness state
+.claude/scheduled_tasks.json
+.claude/scheduled_tasks.lock
+.claude/settings.json
+
+# docs/ is published (README links into it); keep internal-only subdirs out
+docs/plans/
+docs/superpowers/

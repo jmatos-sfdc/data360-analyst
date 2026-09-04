@@ -1,0 +1,15 @@
+apiName: Order_Conversion_Rate__cio
+displayName: Order Conversion Rate
+status: ACTIVE
+definitionType: CALCULATED_METRIC
+dataSpace: default
+dimensions:
+- apiName: account_id__c
+  type: null
+measures:
+- apiName: avg_shipped_amount__c
+  type: null
+- apiName: order_count__c
+  type: null
+sqlPath: queries/Order_Conversion_Rate__cio.sql
+hasExpression: true

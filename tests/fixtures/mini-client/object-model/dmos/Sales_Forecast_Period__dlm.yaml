@@ -1,0 +1,28 @@
+name: Sales_Forecast_Period__dlm
+label: Sales Forecast Period
+category: OTHER
+fields:
+- name: BusinessUnit__c
+  type: Text
+  label: Business Unit
+- name: ForecastSetId__c
+  type: Text
+  label: Forecast Set ID
+- name: StartDate__c
+  type: Date
+  label: Period Start Date
+- name: EndDate__c
+  type: Date
+  label: Period End Date
+- name: AccountId__c
+  type: Text
+  label: Account ID
+- name: ProductId__c
+  type: Text
+  label: Product ID
+- name: Throughput__c
+  type: Number
+  label: Forecast Throughput
+- name: ActualUnits__c
+  type: Number
+  label: Actual Units

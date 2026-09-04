@@ -1,0 +1,49 @@
+{
+  "_authoredFrom": "tests/fixtures/ci-visualize/sql/Growth_Promo_Alert_V1__cio.sql — synthetic fixture, traced by hand",
+  "ci": "Growth_Promo_Alert_V1__cio",
+  "scopes": [
+    { "boundAlias": "__root__", "parentAlias": null,  "kind": "root",    "baseSources": ["q"] },
+    { "boundAlias": "q",        "parentAlias": "__root__", "kind": "derived", "baseSources": ["sel"] },
+    { "boundAlias": "sel",      "parentAlias": "q",   "kind": "derived", "baseSources": ["Incentive_Ledger__dlm", "ssot__Account__dlm", "Loyalty_Member__dlm", "Loyalty_Program__dlm", "dpa", "cfg", "camp"] },
+    { "boundAlias": "dpa",      "parentAlias": "sel", "kind": "derived", "baseSources": ["Region_Assignment__dlm"] },
+    { "boundAlias": "cfg",      "parentAlias": "sel", "kind": "derived", "baseSources": ["Play_Config__dlm"] },
+    { "boundAlias": "camp",     "parentAlias": "sel", "kind": "derived", "baseSources": ["ssot__Campaign__dlm", "Product_Link__dlm", "Play_Config__dlm"] }
+  ],
+  "externalId": {
+    "column": "RecordAlertExternalId__c",
+    "status": "resolved",
+    "comment": "Root projects q.RecordAlertExternalId__c (pass-through); q builds it as CONCAT of 6 sel.* tokens; each sel.* resolves to a base-DMO field (or a derived CASE) one scope down.",
+    "tokens": [
+      { "expr": "sel.CommonOwnerCRMAccountId__c", "resolvesToBase": "ssot__Account__dlm.ssot__Id__c",           "viaAliases": ["q", "sel"] },
+      { "expr": "sel.AlertType__c",               "resolvesToBase": "Play_Config__dlm.Alert_Type_c__c",         "viaAliases": ["q", "sel", "cfg"] },
+      { "expr": "sel.CampaignReference__c",       "resolvesToBase": "ssot__Campaign__dlm.ssot__Id__c",          "viaAliases": ["q", "sel", "camp"] },
+      { "expr": "sel.ProgramReferenceNumber__c",  "resolvesToBase": "Loyalty_Program__dlm.ProgramReferenceNumber__c", "viaAliases": ["q", "sel"] },
+      { "expr": "sel.FiscalYear__c",              "resolvesToBase": "Incentive_Ledger__dlm.fiscal_yr__c",       "viaAliases": ["q", "sel"] },
+      { "expr": "sel.QuarterText__c",             "resolvesToBase": "Incentive_Ledger__dlm.qtr_no__c",          "viaAliases": ["q", "sel"], "derivedVia": "CASE" }
+    ]
+  },
+  "joins": [
+    { "owningScope": "sel", "left": "Incentive_Ledger__dlm",   "right": "ssot__Account__dlm",         "type": "INNER" },
+    { "owningScope": "sel", "left": "ssot__Account__dlm",       "right": "Loyalty_Member__dlm", "type": "INNER" },
+    { "owningScope": "sel", "left": "Loyalty_Member__dlm",      "right": "Loyalty_Program__dlm",       "type": "INNER" },
+    { "owningScope": "sel", "left": "ssot__Account__dlm",       "right": "dpa",  "type": "INNER", "literalKey": false, "note": "real col=col key: dpa.Common_Owner__c = ssot__Account__dlm.OwnerGroupId__c" },
+    { "owningScope": "sel", "left": null,                       "right": "cfg",  "type": "INNER", "literalKey": true, "note": "ON cfg.cfg_key = 'PROMO_CONFIG_KEY' references no outer relation — cross-product risk" },
+    { "owningScope": "sel", "left": null,                       "right": "camp", "type": "INNER", "literalKey": true, "note": "ON camp.join_key = 'PROMO' references no outer relation — cross-product risk" },
+    { "owningScope": "camp","left": "ssot__Campaign__dlm",      "right": "Product_Link__dlm", "type": "INNER" },
+    { "owningScope": "camp","left": "ssot__Campaign__dlm",      "right": "Play_Config__dlm", "type": "INNER" }
+  ],
+  "regressionAnchors": [
+    {
+      "why": "projection-vs-WHERE span collision: tier_level__c is projected (AS TierLevel__c) AND filtered (>= 1), both in sel scope. The filter span must anchor on the WHERE occurrence, not the projection.",
+      "filterPredicateContains": "tier_level__c >= 1",
+      "owningScope": "sel",
+      "spanMustFallWithin": "sel.WHERE"
+    }
+  ],
+  "findings": {
+    "simpleCaseExpected": true,
+    "simpleCaseComment": "CASE Incentive_Ledger__dlm.qtr_no__c WHEN 1 ... (simple CASE form)",
+    "hardcodedIdExpected": true,
+    "hardcodedIdComment": "'012000000000001AAA' on ssot__Account__dlm.RecordTypeId__c join predicate"
+  }
+}

@@ -1,0 +1,15 @@
+apiName: Birthday_Email_Audience__cio
+displayName: Birthday Email Audience
+status: ACTIVE
+definitionType: CALCULATED_METRIC
+dataSpace: default
+dimensions:
+- apiName: individual_id__c
+  type: null
+measures:
+- apiName: email__c
+  type: null
+- apiName: first_name__c
+  type: null
+sqlPath: queries/Birthday_Email_Audience__cio.sql
+hasExpression: true

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0",
+  "report": {
+    "id": "service-index-provenance",
+    "title": "Service Index Provenance",
+    "environment": "TEST",
+    "verifiedDate": "2026-08-01",
+    "groupSelectorLabel": "Consumer View",
+    "leftPaneTitle": "Displayed Measures",
+    "endpointHeader": "Measure",
+    "graphDescription": "A written score and a formula-derived index are traced to a consumer.",
+    "lineageBoundary": "consumer_complete",
+    "initialGroupId": "service"
+  },
+  "layers": [
+    {"id": "calculation", "label": "Calculation", "color": "#91cc75", "order": 1},
+    {"id": "delivery", "label": "Delivery", "color": "#fac858", "order": 2},
+    {"id": "record", "label": "Record", "color": "#ee6666", "order": 3},
+    {"id": "derived", "label": "Derived", "color": "#73c0de", "order": 4},
+    {"id": "surface", "label": "Consumer", "color": "#9a60b4", "order": 5}
+  ],
+  "groups": [
+    {"id": "service", "label": "Service", "endpointIds": ["service-index"]}
+  ],
+  "endpoints": [
+    {"id": "service-index", "groupId": "service", "nodeId": "ui-index", "label": "Service Index", "evidenceIds": ["ui"]}
+  ],
+  "nodes": [
+    {"id": "ci-score", "label": "Service_Score__cio", "role": "ci", "layerId": "calculation", "groups": ["service"], "description": "Calculates the base score.", "evidenceIds": ["sql"]},
+    {"id": "wb-score", "label": "Score writeback", "role": "writeback", "layerId": "delivery", "groups": ["service"], "description": "Writes the base score.", "properties": {"sequence": 1, "sourceName": "Service_Score__cio", "targetObject": "Service_Summary__c", "operation": "Upsert", "upsertKey": "Service_Key__c"}, "evidenceIds": ["dpe"]},
+    {"id": "field-score", "label": "Base_Score__c", "role": "target_field", "layerId": "record", "groups": ["service"], "description": "Stored base score.", "evidenceIds": ["describe"]},
+    {"id": "field-index", "label": "Service_Index__c", "role": "derived_field", "layerId": "derived", "groups": ["service"], "description": "Formula-derived service index.", "properties": {"derivation": "Base_Score__c * 10", "writer": "CRM formula", "boundaryNote": "Not written by the selected DPE."}, "evidenceIds": ["describe"]},
+    {"id": "ui-index", "label": "Service Index", "role": "consumer", "layerId": "surface", "groups": ["service"], "description": "Index displayed in the service workspace.", "claimStatus": "documented", "evidenceIds": ["ui"]}
+  ],
+  "edges": [
+    {"id": "cc1", "from": "ci-score", "to": "wb-score", "type": "data_flow", "groups": ["service"], "evidenceIds": ["dpe"]},
+    {"id": "cc2", "from": "wb-score", "to": "field-score", "type": "data_flow", "groups": ["service"], "evidenceIds": ["dpe"]},
+    {"id": "cc3", "from": "field-score", "to": "field-index", "type": "derivation", "groups": ["service"], "evidenceIds": ["describe"]},
+    {"id": "cc4", "from": "field-index", "to": "ui-index", "type": "data_flow", "groups": ["service"], "evidenceIds": ["ui"]}
+  ],
+  "help": {
+    "title": "How is the index calculated?",
+    "buttonLabel": "Help for the service index",
+    "html": "<p>The <strong>Service Index</strong> is derived from the written base score.</p>",
+    "evidenceIds": ["describe", "ui"]
+  },
+  "sources": [
+    {"id": "sql", "kind": "ci_sql", "artifact": "Service_Score__cio", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "dpe", "kind": "dpe_body", "artifact": "Update_Service_Score", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "describe", "kind": "sobject_describe", "artifact": "Service_Summary__c", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "ui", "kind": "approved_design", "artifact": "Service Workspace Design", "verifiedAt": "2026-08-01T12:00:00Z", "status": "documented"}
+  ]
+}

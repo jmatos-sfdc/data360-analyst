@@ -1,0 +1,15 @@
+apiName: Active_Customer_Accounts__cio
+displayName: Active Customer Accounts
+status: ACTIVE
+definitionType: CALCULATED_METRIC
+dataSpace: default
+dimensions:
+- apiName: account_id__c
+  type: null
+measures:
+- apiName: account_name__c
+  type: null
+- apiName: order_count__c
+  type: null
+sqlPath: queries/Active_Customer_Accounts__cio.sql
+hasExpression: true

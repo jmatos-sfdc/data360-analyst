@@ -1,0 +1,37 @@
+{
+  "_authoredFrom": "tests/fixtures/ci-visualize/sql/Prospect_Eligibility__cio.sql — synthetic fixture, traced by hand",
+  "ci": "Prospect_Eligibility__cio",
+  "scopes": [
+    { "boundAlias": "__root__",      "parentAlias": null,        "kind": "root",    "baseSources": ["Order_Totals__cio", "ssot__Account__dlm", "ssot__Opportunity__dlm", "spc_threshold"] },
+    { "boundAlias": "spc_threshold", "parentAlias": "__root__",  "kind": "derived", "baseSources": ["spc_inner"] },
+    { "boundAlias": "spc_inner",     "parentAlias": "spc_threshold", "kind": "derived", "baseSources": ["Play_Config__dlm"] }
+  ],
+  "externalId": {
+    "column": null,
+    "status": "not-found",
+    "comment": "This CI emits no *ExternalId* output column; grain is CRMAccountId__c + BusinessUnit__c from GROUP BY."
+  },
+  "joins": [
+    { "owningScope": "__root__", "left": "Order_Totals__cio", "right": "ssot__Account__dlm",     "type": "INNER" },
+    { "owningScope": "__root__", "left": "Order_Totals__cio", "right": "ssot__Opportunity__dlm", "type": "LEFT" },
+    { "owningScope": "__root__", "left": "Order_Totals__cio", "right": "spc_threshold", "type": "INNER", "note": "spc_threshold joined on BusinessUnit_Prefixed__c = Order_Totals.BusinessUnit__c; right=target per the convention every other join follows" }
+  ],
+  "regressionAnchors": [
+    {
+      "why": "anti-join: the LEFT JOIN to ssot__Opportunity__dlm is inverted by WHERE ssot__Opportunity__dlm.ssot__CustomerAccountId__c IS NULL. The drop happens at the WHERE (root scope), not at the join.",
+      "filterPredicateContains": "ssot__Opportunity__dlm.ssot__CustomerAccountId__c IS NULL",
+      "owningScope": "__root__",
+      "spanMustFallWithin": "__root__.WHERE",
+      "antiJoinOf": "ssot__Opportunity__dlm"
+    }
+  ],
+  "havingExpected": true,
+  "havingComment": "HAVING SUM(Order_Totals.NetShipmentQuantity__c) > FIRST(spc_threshold.Threshold__c) — root scope aggregate gate",
+  "findings": {
+    "simpleCaseExpected": true,
+    "simpleCaseComment": "CASE Play_Config__dlm.PBU_c__c WHEN 'Consumer' ... in spc_inner is a simple CASE — expect a simple-case finding.",
+    "simpleCaseInScope": "spc_inner",
+    "hardcodedIdExpected": true,
+    "hardcodedIdComment": "'012000000000002AAA' Opportunity_Record_Type__c literal on the LEFT JOIN predicate"
+  }
+}

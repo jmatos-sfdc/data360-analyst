@@ -1,0 +1,16 @@
+client: AcmeRetail
+orgAlias: acme-demo
+instanceUrl: https://acme-demo.example.invalid
+apiVersion: '67.0'
+generatedAt: '2026-05-25T09:00:00'
+counts:
+  dmos: 4
+  dlos: 0
+  mappings: 0
+  cis: 8
+  transforms: 0
+  streams: 0
+  segments: 0
+  activations: 0
+  identityResolutionRulesets: 0
+identityResolutionRulesets: []

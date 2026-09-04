@@ -1,0 +1,17 @@
+apiName: Customer_Order_Summary_QueryEditor__cio
+displayName: Customer Order Summary (Query Editor draft)
+status: DRAFT
+definitionType: CALCULATED_METRIC
+dataSpace: default
+dimensions:
+- apiName: customer__c
+  type: null
+- apiName: order_year__c
+  type: null
+measures:
+- apiName: order_count__c
+  type: null
+- apiName: total_amount__c
+  type: null
+sqlPath: queries/Customer_Order_Summary_QueryEditor__cio.sql
+hasExpression: true

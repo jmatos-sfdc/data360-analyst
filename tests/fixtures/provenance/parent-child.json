@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0",
+  "report": {
+    "id": "service-case-provenance",
+    "title": "Service Case Provenance",
+    "environment": "TEST",
+    "verifiedDate": "2026-08-01",
+    "groupSelectorLabel": "Record Type",
+    "leftPaneTitle": "Written Records",
+    "endpointHeader": "Writeback",
+    "graphDescription": "A parent summary and child detail are written in sequence.",
+    "lineageBoundary": "strict_writeback",
+    "initialGroupId": "cases"
+  },
+  "layers": [
+    {"id": "insight", "label": "Insight", "color": "#3ba272", "order": 1},
+    {"id": "processor", "label": "Processor", "color": "#fc8452", "order": 2},
+    {"id": "records", "label": "Records", "color": "#9a60b4", "order": 3}
+  ],
+  "groups": [
+    {"id": "cases", "label": "Cases", "endpointIds": ["parent-record", "child-record"]}
+  ],
+  "endpoints": [
+    {"id": "parent-record", "groupId": "cases", "nodeId": "target-parent", "label": "Case Summary"},
+    {"id": "child-record", "groupId": "cases", "nodeId": "target-child", "label": "Case Detail"}
+  ],
+  "nodes": [
+    {"id": "ci-parent", "label": "Case_Summary__cio", "role": "ci", "layerId": "insight", "groups": ["cases"], "description": "Produces parent summaries.", "evidenceIds": ["sql-parent"]},
+    {"id": "ci-child", "label": "Case_Detail__cio", "role": "ci", "layerId": "insight", "groups": ["cases"], "description": "Produces child details.", "evidenceIds": ["sql-child"]},
+    {"id": "dpe-main", "label": "Update_Service_Cases", "role": "dpe", "layerId": "processor", "groups": ["cases"], "description": "Runs the two writebacks.", "evidenceIds": ["dpe"]},
+    {"id": "wb-parent", "label": "Parent writeback", "role": "writeback", "layerId": "processor", "groups": ["cases"], "description": "Writes parent summaries first.", "properties": {"sequence": 1, "sourceName": "Case_Summary__cio", "targetObject": "Case_Summary__c", "operation": "Upsert", "upsertKey": "Summary_Key__c"}, "evidenceIds": ["dpe"]},
+    {"id": "wb-child", "label": "Child writeback", "role": "writeback", "layerId": "processor", "groups": ["cases"], "description": "Writes child details second.", "properties": {"sequence": 2, "sourceName": "Case_Detail__cio", "targetObject": "Case_Detail__c", "operation": "Upsert", "upsertKey": "Detail_Key__c"}, "evidenceIds": ["dpe"]},
+    {"id": "target-parent", "label": "Case_Summary__c", "role": "target_object", "layerId": "records", "groups": ["cases"], "description": "Parent record.", "evidenceIds": ["describe-parent"]},
+    {"id": "target-child", "label": "Case_Detail__c", "role": "target_object", "layerId": "records", "groups": ["cases"], "description": "Child record.", "evidenceIds": ["describe-child"]}
+  ],
+  "edges": [
+    {"id": "pc1", "from": "ci-parent", "to": "wb-parent", "type": "data_flow", "groups": ["cases"], "evidenceIds": ["dpe"]},
+    {"id": "pc2", "from": "ci-child", "to": "wb-child", "type": "data_flow", "groups": ["cases"], "evidenceIds": ["dpe"]},
+    {"id": "pc3", "from": "dpe-main", "to": "wb-parent", "type": "grouping", "groups": ["cases"], "evidenceIds": ["dpe"]},
+    {"id": "pc4", "from": "dpe-main", "to": "wb-child", "type": "grouping", "groups": ["cases"], "evidenceIds": ["dpe"]},
+    {"id": "pc5", "from": "wb-parent", "to": "target-parent", "type": "data_flow", "groups": ["cases"], "evidenceIds": ["dpe"]},
+    {"id": "pc6", "from": "wb-child", "to": "target-child", "type": "data_flow", "groups": ["cases"], "evidenceIds": ["dpe"]},
+    {"id": "pc7", "from": "target-parent", "to": "target-child", "type": "relationship", "groups": ["cases"], "label": "parent lookup", "evidenceIds": ["describe-child"]}
+  ],
+  "sources": [
+    {"id": "sql-parent", "kind": "ci_sql", "artifact": "Case_Summary__cio", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "sql-child", "kind": "ci_sql", "artifact": "Case_Detail__cio", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "dpe", "kind": "dpe_body", "artifact": "Update_Service_Cases", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "describe-parent", "kind": "sobject_describe", "artifact": "Case_Summary__c", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "describe-child", "kind": "sobject_describe", "artifact": "Case_Detail__c", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"}
+  ]
+}

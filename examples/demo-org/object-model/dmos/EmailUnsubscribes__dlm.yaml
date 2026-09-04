@@ -1,0 +1,14 @@
+name: Email_Unsubscribes__dlm
+label: Email Unsubscribes
+category: ENGAGEMENT
+fields:
+- name: IndividualId__c
+  type: Text
+  label: Individual ID
+  usageTag: PrimaryKey
+- name: UnsubscribeDate__c
+  type: DateTime
+  label: Unsubscribe Date
+- name: Reason__c
+  type: Text
+  label: Reason

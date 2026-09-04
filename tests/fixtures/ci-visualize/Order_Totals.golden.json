@@ -1,0 +1,37 @@
+{
+  "_authoredFrom": "tests/fixtures/ci-visualize/sql/Order_Totals__cio.sql — synthetic fixture, traced by hand",
+  "ci": "Order_Totals__cio",
+  "shape": "3-leg FULL JOIN (wd / d / ad) over Sales_Ledger__dlm; outer scope applies CDPMONTH(HOUR_ADD(...)) date logic in GROUP BY",
+  "scopes": [
+    { "boundAlias": "__root__", "parentAlias": null,       "kind": "root",    "baseSources": ["wd", "d", "ad"] },
+    { "boundAlias": "wd",       "parentAlias": "__root__",  "kind": "derived", "baseSources": ["Sales_Ledger__dlm", "ssot__GoodsProduct__dlm", "Account_Hierarchy__cio", "ssot__Account__dlm", "Region_Assignment__dlm", "co", "sap"] },
+    { "boundAlias": "d",        "parentAlias": "__root__",  "kind": "derived", "baseSources": ["Sales_Ledger__dlm", "ssot__GoodsProduct__dlm", "Account_Hierarchy__cio", "ssot__Account__dlm", "Region_Assignment__dlm", "co", "sap"] },
+    { "boundAlias": "ad",       "parentAlias": "__root__",  "kind": "derived", "baseSources": ["Sales_Ledger__dlm", "ssot__GoodsProduct__dlm", "Account_Hierarchy__cio", "ssot__Account__dlm", "co"] }
+  ],
+  "scopeNotes": "co appears in all three legs; sap only in wd and d. Alias-reuse trap: each co/sap must scope to its owning leg. The invariant test enforces every co/sap parent is a leg (wd/d/ad), never __root__.",
+  "externalId": {
+    "column": null,
+    "status": "not-found",
+    "comment": "No *ExternalId* output column. Rollup CI; grain from the outer GROUP BY."
+  },
+  "legMergeJoins": [
+    { "owningScope": "__root__", "left": "wd", "right": "d",  "type": "FULL", "keys": ["CRMAccountId__c", "MaterialId__c", "TxDate__c"] },
+    { "owningScope": "__root__", "left": "wd", "right": "ad", "type": "FULL", "keys": ["CRMAccountId__c", "MaterialId__c", "TxDate__c"] }
+  ],
+  "regressionAnchors": [
+    {
+      "why": "anti-join in the wd leg: LEFT OUTER JOIN Region_Assignment__dlm then WHERE Region_Assignment__dlm.Common_Owner__c IS NULL. Drop is at the wd-scope WHERE, not the join.",
+      "filterPredicateContains": "Region_Assignment__dlm.Common_Owner__c IS NULL",
+      "owningScope": "wd",
+      "spanMustFallWithin": "wd.WHERE"
+    }
+  ],
+  "dateLogicExpected": true,
+  "dateLogicComment": "Outer TxMonth__c = CDPMONTH(HOUR_ADD(IFNULL(IFNULL(wd.TxDate__c, d.TxDate__c), ad.TxDate__c), 0)) — outer-scope date derivation over the coalesced leg dates.",
+  "havingExpected": true,
+  "havingComment": "ad leg: HAVING SUM(Sales_Ledger__dlm.assoc_qty__c) <> 0",
+  "findings": {
+    "hardcodedIdExpected": true,
+    "hardcodedIdComment": "'012000000000001AAA' Business Account RecordTypeId__c literal, repeated across legs"
+  }
+}

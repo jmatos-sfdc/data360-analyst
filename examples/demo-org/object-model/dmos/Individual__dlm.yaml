@@ -1,0 +1,23 @@
+name: ssot__Individual__dlm
+label: Individual
+category: PROFILE
+fields:
+- name: Id__c
+  type: Text
+  label: Individual ID
+  usageTag: PrimaryKey
+- name: FirstName__c
+  type: Text
+  label: First Name
+- name: LastName__c
+  type: Text
+  label: Last Name
+- name: Email__c
+  type: Text
+  label: Email
+- name: BirthDate__c
+  type: Date
+  label: Birth Date
+- name: AccountId__c
+  type: Text
+  label: Account ID

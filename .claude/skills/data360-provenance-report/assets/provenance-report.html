@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Provenance Report</title>
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"
+        onerror="window.__visLoadFailed = true;"></script>
+<style>
+  :root {
+    --bg: #f5f7fa; --card: #fff; --text: #212121; --muted: #757575;
+    --border: #e0e0e0; --accent: #1976d2; --accent-dark: #0d47a1;
+    --hover: #f5f5f5; --surface: #fff;
+    --shadow-sm: 0 1px 2px rgba(17,24,39,.06), 0 1px 3px rgba(17,24,39,.08);
+    --shadow-md: 0 4px 6px rgba(17,24,39,.05), 0 10px 15px rgba(17,24,39,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden; background: var(--bg); color: var(--text);
+    font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  button, select, input { font: inherit; }
+  button, select { min-height: 32px; cursor: pointer; }
+  button:focus-visible, select:focus-visible, input:focus-visible,
+  [tabindex]:focus-visible, [role="separator"]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+  }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  .top-bar {
+    height: 56px; padding: 10px 18px; display: flex; align-items: center; gap: 12px;
+    background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  .report-title { font-size: 15px; font-weight: 700; }
+  .report-subtitle { color: var(--muted); }
+  .spacer { flex: 1; }
+  .badge { padding: 4px 9px; border-radius: 4px; background: #fff3e0; color: #a84100; }
+  .control {
+    border: 1px solid var(--border); border-radius: 4px; padding: 5px 9px;
+    background: var(--surface); color: var(--text);
+  }
+  .control:hover { background: var(--hover); }
+  .group-select { min-width: 190px; font-weight: 600; color: var(--accent); }
+  .icon-control { width: 32px; padding: 0; border-radius: 50%; font-weight: 700; }
+
+  .split { display: flex; height: calc(100vh - 56px); }
+  .pane { position: relative; overflow: auto; }
+  .pane-endpoints {
+    flex: 0 0 var(--endpoint-width, 320px); min-width: 240px; max-width: 680px;
+    background: var(--card); border-right: 1px solid var(--border);
+  }
+  .split.endpoint-collapsed .pane-endpoints { flex-basis: 0; min-width: 0; max-width: 0; overflow: hidden; border: 0; }
+  .split.endpoint-collapsed .endpoint-resizer { display: none; }
+  .pane-graph { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .pane-inspector {
+    flex: 0 0 0; min-width: 0; max-width: 0; overflow: hidden;
+    background: var(--card); border-left: 1px solid var(--border);
+  }
+  .split.inspector-open .pane-inspector {
+    flex: 0 0 var(--inspector-width, 420px); min-width: 300px; max-width: 680px;
+    overflow-y: auto; padding: 14px 16px;
+  }
+  .endpoint-resizer, .inspector-resizer {
+    flex: 0 0 5px; align-self: stretch; background: var(--border); cursor: col-resize;
+  }
+  .inspector-resizer { display: none; }
+  .split.inspector-open .inspector-resizer { display: block; }
+  .endpoint-resizer:hover, .inspector-resizer:hover { background: var(--accent); }
+  .pane-header {
+    min-height: 34px; padding: 8px 12px; display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(#fafafa,#f1f3f5); border-bottom: 1px solid var(--border);
+    color: #475467; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .pane-header .subtitle { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .collapse-control { width: 24px; min-height: 24px; padding: 0; }
+
+  .endpoint-wrap { padding: 14px; }
+  .endpoint-grid { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); }
+  .endpoint-header, .endpoint-button { min-height: 34px; padding: 7px 9px; border: 0; text-align: left; }
+  .endpoint-header { background: #f2f4f7; color: #344054; font-weight: 700; }
+  .endpoint-button {
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+    background: var(--card); color: var(--accent); font-weight: 600;
+  }
+  .endpoint-button:hover { background: var(--hover); }
+  .endpoint-button.active { background: var(--accent); color: #fff; }
+  .endpoint-button.dimmed { opacity: .35; }
+  .group-note, .endpoint-summary, .endpoint-note {
+    margin-top: 12px; padding: 10px 12px; border-radius: 4px; background: #f6f8fb;
+    border-left: 3px solid var(--accent); line-height: 1.55;
+  }
+  .endpoint-note { background: #fff8e1; border-left-color: #f59e0b; color: #664d03; }
+
+  .graph-controls {
+    min-height: 40px; padding: 5px 12px; display: flex; align-items: center; gap: 7px;
+    flex-wrap: wrap; background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  .graph-hint { margin-left: auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
+  #network { flex: 1 1 0; min-height: 0; width: 100%; }
+  .zoom-control { display: flex; align-items: center; gap: 6px; border-left: 1px solid var(--border); padding-left: 7px; }
+  .zoom-control input { width: 100px; }
+  .zoom-readout { width: 38px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend, .minimap {
+    position: absolute; bottom: 14px; z-index: 10; padding: 8px 10px;
+    background: color-mix(in srgb, var(--card) 95%, transparent); border: 1px solid var(--border);
+    border-radius: 6px; box-shadow: var(--shadow-sm);
+  }
+  .legend { left: 14px; max-width: 210px; }
+  .minimap { right: 14px; padding: 4px; line-height: 0; }
+  .minimap.hidden { display: none; }
+  .minimap canvas { display: block; cursor: crosshair; touch-action: none; }
+  .legend-title { margin-bottom: 5px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+  .legend-row { display: flex; align-items: center; gap: 7px; padding: 2px 3px; border-radius: 3px; }
+  .legend-row.active { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 700; }
+  .legend-dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .graph-fallback { display: none; margin: 20px; padding: 22px; text-align: center; background: #fff8e1; border: 1px solid #ffd54f; }
+
+  .node-nav {
+    position: fixed; top: 64px; left: 12px; z-index: 60; width: 310px;
+    max-height: calc(100vh - 90px); display: flex; flex-direction: column;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow-md);
+  }
+  .node-nav[hidden] { display: none; }
+  .node-nav-head { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); }
+  .node-nav-head input { flex: 1; padding: 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); }
+  .node-nav-list { overflow-y: auto; padding: 4px; outline: none; }
+  .node-nav-group { padding: 8px 7px 3px; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+  .node-nav-option { min-height: 32px; padding: 6px 7px; display: flex; align-items: center; gap: 7px; border-radius: 4px; cursor: pointer; }
+  .node-nav-option:hover, .node-nav-option.kb-focus { background: var(--hover); }
+  .node-nav-option.active { background: var(--accent); color: #fff; }
+  .node-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .node-nav-empty { padding: 12px 8px; color: var(--muted); font-style: italic; }
+
+  .node-inspector { display: none; }
+  .node-inspector.open { display: block; }
+  .inspector-close { position: absolute; top: 6px; right: 8px; width: 32px; border: 0; background: none; color: var(--muted); font-size: 18px; }
+  .node-inspector h3 { padding-right: 28px; margin-bottom: 4px; color: var(--accent-dark); font-size: 14px; word-break: break-word; }
+  .role-tag { display: inline-block; margin-bottom: 8px; padding: 2px 6px; border-radius: 3px; background: #e8eef6; color: #344054; font-size: 9px; text-transform: uppercase; }
+  .inspector-nav { display: flex; gap: 6px; margin-bottom: 10px; }
+  .relations { margin: 8px 0 12px; }
+  .relation-block + .relation-block { margin-top: 8px; }
+  .relation-heading, .technical-heading { margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+  .relation-list { list-style: none; }
+  .relation-button { width: 100%; padding: 5px 7px; display: flex; gap: 7px; align-items: center; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--accent); text-align: left; }
+  .relation-empty { color: var(--muted); font-style: italic; }
+  .onboarding { margin: 10px 0 12px; line-height: 1.55; }
+  .onboarding .anchor { margin-bottom: 8px; padding: 8px 10px; border-left: 3px solid var(--accent); background: #f5f7fa; font-style: italic; }
+  .onboarding h3, .onboarding h4 { margin: 11px 0 4px; color: var(--accent-dark); }
+  .onboarding p, .onboarding ul, .onboarding ol, .onboarding table { margin-bottom: 8px; }
+  .onboarding ul, .onboarding ol { padding-left: 18px; }
+  .onboarding table { width: 100%; border-collapse: collapse; }
+  .onboarding th, .onboarding td { padding: 5px; border-bottom: 1px solid var(--border); text-align: left; }
+  .technical-heading { padding-top: 9px; border-top: 1px solid var(--border); }
+  .endpoint-technical-label { margin: 8px 0; color: var(--muted); }
+  .endpoint-technical-label code { color: var(--text); font-family: "SFMono-Regular", Consolas, monospace; }
+  .description { margin-bottom: 8px; color: #475467; line-height: 1.5; }
+  .property-row { display: flex; gap: 8px; padding: 4px 0; border-top: 1px solid var(--border); }
+  .property-label { min-width: 96px; color: var(--muted); font-weight: 600; }
+  .property-value { word-break: break-word; font-family: "SFMono-Regular", Consolas, monospace; }
+  .property-value.multiline { white-space: pre-line; }
+
+  .help-overlay { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); }
+  .help-overlay.open { display: flex; }
+  .help-dialog { width: 720px; max-width: 92%; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; background: var(--card); border-radius: 8px; box-shadow: var(--shadow-md); }
+  .help-header { padding: 14px 18px; display: flex; align-items: center; gap: 8px; background: linear-gradient(135deg,var(--accent),var(--accent-dark)); color: #fff; }
+  .help-header h2 { flex: 1; font-size: 16px; }
+  .help-body { padding: 18px 22px; overflow-y: auto; line-height: 1.55; }
+  .help-body p, .help-body ul, .help-body ol, .help-body table { margin-bottom: 10px; }
+  .help-body ul, .help-body ol { padding-left: 20px; }
+  .help-body table { width: 100%; border-collapse: collapse; }
+  .help-body th, .help-body td { padding: 6px; border-bottom: 1px solid var(--border); text-align: left; }
+
+  div.vis-tooltip { max-width: 330px !important; padding: 8px 10px !important; white-space: normal !important; background: var(--card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; box-shadow: var(--shadow-md) !important; font: 12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important; }
+  .tooltip-name { font-weight: 800; }
+  .tooltip-role { margin-top: 2px; color: var(--accent); font-size: 10px; text-transform: uppercase; }
+  .tooltip-detail { margin-top: 5px; color: var(--muted); }
+
+  body.dark-theme {
+    --bg: #0b1220; --card: #111827; --text: #e5e7eb; --muted: #94a3b8;
+    --border: #273244; --accent: #60a5fa; --accent-dark: #93c5fd;
+    --hover: #1a2840; --surface: #111b2e;
+    --shadow-sm: 0 1px 2px rgba(2,8,23,.7), 0 1px 3px rgba(2,8,23,.6);
+    --shadow-md: 0 8px 24px rgba(2,8,23,.65), 0 16px 40px rgba(2,8,23,.45);
+  }
+  body.dark-theme .pane-header { background: linear-gradient(#182338,#111a2b); color: #d0d8e5; }
+  body.dark-theme .endpoint-header { background: #172033; color: #d0d8e5; }
+  body.dark-theme .group-note, body.dark-theme .endpoint-summary,
+  body.dark-theme .onboarding .anchor { background: #101e33; }
+  body.dark-theme .endpoint-note { background: #3b2f16; color: #f9d9ab; }
+  body.dark-theme .role-tag { background: #25354d; color: #bdd5f4; }
+  body.dark-theme .description { color: #cbd5e1; }
+  body.dark-theme .legend, body.dark-theme .minimap { background: rgba(17,24,39,.95); }
+  @media (max-width: 900px) { .report-subtitle, .graph-hint { display: none; } }
+</style>
+</head>
+<body>
+<div id="srAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<header class="top-bar">
+  <h1 id="reportTitle" class="report-title">Provenance Report</h1>
+  <span id="reportSubtitle" class="report-subtitle"></span>
+  <span id="environmentBadge" class="badge"></span>
+  <span class="spacer"></span>
+  <button id="nodeNavToggle" class="control" aria-expanded="false" aria-controls="nodeNav">Find node</button>
+  <button id="themeToggle" class="control" aria-label="Switch to dark theme">Dark</button>
+  <button id="helpButton" class="control icon-control" aria-label="Help">?</button>
+  <label id="groupSelectLabel" for="groupSelect"></label>
+  <select id="groupSelect" class="control group-select"></select>
+  <button id="clearSelection" class="control">Clear Selection</button>
+</header>
+
+<aside id="nodeNav" class="node-nav" hidden aria-label="Node navigator">
+  <div class="node-nav-head">
+    <input id="nodeNavSearch" type="search" placeholder="Search nodes…" aria-label="Search nodes" aria-controls="nodeNavList">
+    <button id="nodeNavClose" class="control" aria-label="Close node navigator">×</button>
+  </div>
+  <div id="nodeNavList" class="node-nav-list" role="listbox" aria-label="Graph nodes grouped by layer" tabindex="0"></div>
+</aside>
+
+<div id="helpOverlay" class="help-overlay">
+  <section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <header class="help-header">
+      <h2 id="helpTitle">Help</h2>
+      <button id="helpClose" class="control" aria-label="Close help">×</button>
+    </header>
+    <div id="helpBody" class="help-body"></div>
+  </section>
+</div>
+
+<main id="split" class="split">
+  <section class="pane pane-endpoints" aria-labelledby="endpointPaneTitle">
+    <div class="pane-header"><span id="endpointPaneTitle">Trace Endpoints</span><span id="endpointSubtitle" class="subtitle"></span></div>
+    <div class="endpoint-wrap">
+      <div id="endpointGrid" class="endpoint-grid"></div>
+      <div id="endpointDetail"></div>
+    </div>
+  </section>
+  <div id="endpointResizer" class="endpoint-resizer" role="separator" aria-orientation="vertical" aria-label="Resize endpoint panel. Use left and right arrow keys." aria-valuemin="240" aria-valuemax="680" aria-valuenow="320" tabindex="0"></div>
+
+  <section class="pane pane-graph" aria-labelledby="graphPaneTitle">
+    <div class="pane-header">
+      <button id="collapseEndpoints" class="control collapse-control" aria-label="Collapse endpoint panel" aria-pressed="false">‹</button>
+      <span id="graphPaneTitle">Provenance Graph</span><span id="graphSubtitle" class="subtitle"></span>
+    </div>
+    <div class="graph-controls">
+      <label id="filterLabel" for="filterSelect" class="sr-only">Filter graph</label>
+      <select id="filterSelect" class="control"></select>
+      <button id="fitGraph" class="control">Fit</button>
+      <button id="resetGraph" class="control">Reset</button>
+      <button id="minimapToggle" class="control" aria-pressed="true">Minimap</button>
+      <span class="zoom-control">
+        <button id="zoomOut" class="control" aria-label="Zoom out">−</button>
+        <input id="zoomSlider" type="range" min="0" max="1000" value="500" aria-label="Zoom level">
+        <button id="zoomIn" class="control" aria-label="Zoom in">+</button>
+        <span id="zoomReadout" class="zoom-readout">100%</span>
+      </span>
+      <span class="graph-hint">Click a node for details · Hover to preview</span>
+    </div>
+    <div id="network" role="img"></div>
+    <div id="graphFallback" class="graph-fallback"><strong>Graph couldn't load.</strong><br>The graph library is unavailable. The endpoint list remains readable, but graph interactions are disabled.</div>
+    <div id="legend" class="legend"></div>
+    <div id="minimap" class="minimap"><canvas id="minimapCanvas"></canvas></div>
+  </section>
+
+  <div id="inspectorResizer" class="inspector-resizer" role="separator" aria-orientation="vertical" aria-label="Resize detail panel. Use left and right arrow keys." aria-valuemin="300" aria-valuemax="680" aria-valuenow="420" tabindex="0"></div>
+  <section id="inspectorPane" class="pane pane-inspector" role="region" aria-labelledby="inspectorTitle" tabindex="-1">
+    <article id="nodeInspector" class="node-inspector">
+      <button id="inspectorClose" class="inspector-close" aria-label="Close detail panel">×</button>
+      <h3 id="inspectorTitle">Select a node</h3>
+      <span id="roleTag" class="role-tag"></span>
+      <div class="inspector-nav"><button id="previousNode" class="control">‹ Prev</button><button id="nextNode" class="control">Next ›</button></div>
+      <div id="onboarding" class="onboarding"></div>
+      <nav class="relations" aria-label="Lineage relationships">
+        <div class="relation-block"><div class="relation-heading">Upstream</div><ul id="upstreamList" class="relation-list"></ul></div>
+        <div class="relation-block"><div class="relation-heading">Downstream</div><ul id="downstreamList" class="relation-list"></ul></div>
+      </nav>
+      <div class="technical-heading">Technical detail</div>
+      <div id="inspectorEndpointDetail"></div>
+      <div id="nodeDescription" class="description"></div>
+      <div id="nodeProperties"></div>
+    </article>
+  </section>
+</main>
+
+<script id="provenance-config" type="application/json">__PROVENANCE_CONFIG__</script>
+<script>
+(() => {
+  'use strict';
+  const configElement = document.getElementById('provenance-config');
+  let config;
+  try { config = JSON.parse(configElement.textContent); }
+  catch (error) {
+    document.body.innerHTML = '<main style="padding:24px"><h1>Invalid provenance configuration</h1><p>The embedded report configuration could not be parsed.</p></main>';
+    throw error;
+  }
+
+  const report = config.report;
+  const layers = [...config.layers].sort((a,b) => a.order - b.order);
+  const layerById = new Map(layers.map(layer => [layer.id, layer]));
+  const groupById = new Map(config.groups.map(group => [group.id, group]));
+  const endpointById = new Map(config.endpoints.map(endpoint => [endpoint.id, endpoint]));
+  const nodeById = new Map(config.nodes.map(node => [node.id, node]));
+  const edgeById = new Map(config.edges.map(edge => [edge.id, edge]));
+  const storage = report.storageNamespace || report.id;
+  const storageKey = suffix => `${storage}-${suffix}`;
+  const split = document.getElementById('split');
+  let currentGroupId = report.initialGroupId;
+  let activeEndpointId = null;
+  let activeNodeId = null;
+  let activeFilterId = report.initialFilterId || 'all';
+  let inspectorNodeId = null;
+  let inspectorOpener = null;
+  let navFocusId = null;
+  let navVisibleIds = [];
+  let helpOpener = null;
+  let network, nodesData, edgesData;
+  let graphPositions = {};
+  const visAvailable = typeof vis !== 'undefined' && !window.__visLoadFailed;
+
+  function safeStorageGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
+  function safeStorageSet(key, value) { try { localStorage.setItem(key, value); } catch (_) {} }
+  function announce(message) { const el = document.getElementById('srAnnouncer'); el.textContent = ''; setTimeout(() => { el.textContent = message; }, 20); }
+  function isDark() { return document.body.classList.contains('dark-theme'); }
+  function hexToRgb(hex) { return [1,3,5].map(index => parseInt(hex.slice(index,index+2),16)); }
+  function luminance(hex) { return hexToRgb(hex).map(v => { const c=v/255; return c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4); }).reduce((sum,c,i)=>sum+c*[.2126,.7152,.0722][i],0); }
+  function contrast(a,b) { const x=luminance(a), y=luminance(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); }
+  function fontColor(fill) { return contrast('#ffffff',fill)>=4.5 ? '#ffffff' : '#1a1a1a'; }
+  function shade(hex, percent) { const rgb=hexToRgb(hex).map(v=>Math.max(0,Math.min(255,Math.round(v+(percent/100)*255)))); return '#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join(''); }
+  function darkenNodeBorder(hex) { const rgb=hexToRgb(hex).map(v=>Math.round(v*.7)); return '#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join(''); }
+  function isDpeParent(node) { return node.role==='dpe'; }
+  function nodeShadow(node) { const parent=isDpeParent(node); return isDark()?{enabled:true,color:'rgba(203,213,225,.82)',size:parent?25.5:16.5,x:0,y:parent?10:7}:{enabled:true,color:'rgba(2,8,23,.42)',size:parent?19.5:12,x:0,y:parent?10:7}; }
+  function edgePalette() { return isDark() ? {idle:'#3d4b63',dim:'#222d40',group:'#33405a',derive:'#8b5cf6',rel:'#5b6b86',active:'#ff9800'} : {idle:'#b0b7c3',dim:'#e0e0e0',group:'#cfd8dc',derive:'#7c3aed',rel:'#7b8798',active:'#f57c00'}; }
+  function edgeFont() { return {size:9,color:isDark()?'#9fb0c9':'#64748b',background:isDark()?'rgba(15,23,42,.92)':'rgba(255,255,255,.92)',strokeWidth:0}; }
+  function edgeTraversable(edge) { return edge.type==='data_flow' || (edge.type==='derivation' && report.lineageBoundary==='consumer_complete'); }
+  function edgeStyle(edge) {
+    const palette=edgePalette(), semantic=edge.type;
+    const color=semantic==='grouping'?palette.group:semantic==='relationship'?palette.rel:semantic==='derivation'?palette.derive:palette.idle;
+    return {color:{color,highlight:color,hover:color},dashes:semantic==='grouping'?[4,4]:semantic==='relationship'?[2,5]:semantic==='derivation'?[6,4]:false,arrows:{to:{enabled:semantic==='data_flow'||semantic==='derivation',scaleFactor:.55}},width:semantic==='data_flow'?1.4:1,font:edgeFont()};
+  }
+  function nodeColor(node) { const fill=(node.style&&node.style.color)||layerById.get(node.layerId).color; return {background:fill,border:isDark()?shade(fill,15):darkenNodeBorder(fill),highlight:{background:shade(fill,7),border:'#f57c00'},hover:{background:shade(fill,7),border:isDark()?shade(fill,24):darkenNodeBorder(fill)}}; }
+  function nodeLabel(node) { const display=node.label.replace(/__(c|cio|dll|dlm)$/i,''); const max=(node.style&&node.style.labelMaxCharacters)||(report.layout&&report.layout.labelMaxCharacters)||34; return display.length>max ? display.slice(0,max-3)+'...' : display; }
+  function roleLabel(node) { return node.role==='consumer' ? layerById.get(node.layerId).label : node.role.replaceAll('_',' '); }
+  function tooltip(node) { const root=document.createElement('div'); root.innerHTML=`<div class="tooltip-name"></div><div class="tooltip-role"></div><div class="tooltip-detail"></div>`; root.children[0].textContent=node.label; root.children[1].textContent=layerById.get(node.layerId).label; root.children[2].textContent=node.description; return root; }
+
+  function initializeDocument() {
+    document.title=report.documentTitle||report.title;
+    document.getElementById('reportTitle').textContent=report.title;
+    document.getElementById('reportSubtitle').textContent=report.subtitle||'';
+    document.getElementById('environmentBadge').textContent=`${report.environment} · verified ${report.verifiedDate}`;
+    document.getElementById('groupSelectLabel').textContent=report.groupSelectorLabel;
+    document.getElementById('groupSelect').setAttribute('aria-label',report.groupSelectorLabel);
+    document.getElementById('endpointPaneTitle').textContent=report.leftPaneTitle;
+    document.getElementById('graphPaneTitle').textContent=report.graphTitle||'Provenance Graph';
+    document.getElementById('graphSubtitle').textContent=report.graphSubtitle||'';
+    document.getElementById('network').setAttribute('aria-label',report.graphDescription);
+    document.getElementById('filterLabel').textContent=report.filterLabel||'Filter graph';
+    document.getElementById('filterSelect').setAttribute('aria-label',report.filterLabel||'Filter graph');
+    const help=config.help;
+    document.getElementById('helpButton').hidden=!help;
+    if (help) { document.getElementById('helpButton').setAttribute('aria-label',help.buttonLabel); document.getElementById('helpTitle').textContent=help.title; document.getElementById('helpBody').innerHTML=help.html; }
+    const select=document.getElementById('groupSelect');
+    config.groups.forEach(group => select.add(new Option(group.label,group.id)));
+    select.value=currentGroupId;
+    const filter=document.getElementById('filterSelect');
+    filter.add(new Option('All','all'));
+    (config.filters||[]).forEach(item=>filter.add(new Option(item.label,item.id)));
+    filter.value=activeFilterId;
+    filter.hidden=!config.filters||!config.filters.length;
+    document.getElementById('filterLabel').hidden=filter.hidden;
+    renderLegend(); renderEndpoints(); restorePreferences(); bindControls();
+  }
+
+  function renderEndpoints() {
+    const group=groupById.get(currentGroupId), grid=document.getElementById('endpointGrid');
+    grid.innerHTML='';
+    const header=document.createElement('div'); header.className='endpoint-header'; header.textContent=report.endpointHeader; grid.appendChild(header);
+    group.endpointIds.forEach(id=>{
+      const endpoint=endpointById.get(id), button=document.createElement('button');
+      button.className='endpoint-button'; button.dataset.endpointId=id; button.setAttribute('aria-pressed',String(id===activeEndpointId));
+      button.innerHTML='<span></span><span>▸</span>'; button.firstElementChild.textContent=endpoint.label;
+      if(activeEndpointId){button.classList.toggle('active',id===activeEndpointId);button.classList.toggle('dimmed',id!==activeEndpointId);}
+      button.addEventListener('click',()=>selectEndpoint(id)); grid.appendChild(button);
+    });
+    document.getElementById('endpointSubtitle').textContent=`— ${group.label} · ${report.endpointInstruction||'click an item to trace'}`;
+    const detail=document.getElementById('endpointDetail'); detail.innerHTML='';
+    if(!activeEndpointId&&group.noteHtml){const note=document.createElement('div');note.className='group-note';note.innerHTML=group.noteHtml;detail.appendChild(note);}
+  }
+
+  function selectEndpoint(id) {
+    const endpoint=endpointById.get(id); activeEndpointId=id; activeNodeId=endpoint.nodeId; renderEndpoints();
+    applyPersistentHighlight(); openNode(endpoint.nodeId,{focus:true}); announce(`${endpoint.label} selected. Provenance trace shown.`);
+    if(network)setTimeout(()=>network.focus(endpoint.nodeId,{scale:.85,animation:{duration:350}}),230);
+  }
+
+  function clearSelection() { activeEndpointId=null;activeNodeId=null;renderEndpoints();closeInspector();applyPersistentHighlight();announce('Selection cleared.'); }
+  function changeGroup() { currentGroupId=document.getElementById('groupSelect').value;activeEndpointId=null;activeNodeId=null;closeInspector();renderEndpoints();applyPersistentHighlight(); }
+
+  function renderLegend() {
+    const legend=document.getElementById('legend'); legend.innerHTML='<div class="legend-title">Data Layers</div>';
+    layers.filter(layer=>layer.legend!==false).forEach(layer=>{const row=document.createElement('div');row.className='legend-row';row.dataset.layerId=layer.id;row.innerHTML='<span class="legend-dot"></span><span></span>';row.children[0].style.background=layer.color;row.children[1].textContent=layer.label;legend.appendChild(row);});
+  }
+
+  function initGraph() {
+    const layout=report.layout||{};
+    nodesData=new vis.DataSet(config.nodes.map(node=>({id:node.id,label:nodeLabel(node),title:tooltip(node),level:Number.isInteger(node.level)?node.level:layerById.get(node.layerId).order,shape:'box',shapeProperties:{borderRadius:8},color:nodeColor(node),font:{size:node.role==='dpe'?13:11,color:fontColor((node.style&&node.style.color)||layerById.get(node.layerId).color),face:'-apple-system, BlinkMacSystemFont, "Segoe UI"',bold:node.role==='dpe'||node.role==='consumer',strokeWidth:0},margin:node.role==='dpe'?14:10,widthConstraint:node.role==='dpe'?{minimum:280,maximum:320}:{minimum:110,maximum:200},heightConstraint:node.role==='dpe'?{minimum:44}:{minimum:34},borderWidth:node.role==='dpe'?2.6:2,borderWidthSelected:3,shadow:nodeShadow(node)})));
+    edgesData=new vis.DataSet(config.edges.map(edge=>({id:edge.id,from:edge.from,to:edge.to,label:edge.label||'',smooth:{type:'cubicBezier',roundness:.32},...edgeStyle(edge)})));
+    network=new vis.Network(document.getElementById('network'),{nodes:nodesData,edges:edgesData},{layout:{hierarchical:{enabled:true,direction:layout.direction||'UD',sortMethod:'directed',levelSeparation:layout.levelSeparation||160,nodeSpacing:layout.nodeSpacing||230,treeSpacing:layout.treeSpacing||300,parentCentralization:true,blockShifting:true,edgeMinimization:true}},physics:{enabled:false},interaction:{hover:true,dragNodes:true,dragView:true,zoomView:false,selectConnectedEdges:false}});
+    network.once('afterDrawing',()=>{network.setOptions({layout:{hierarchical:{enabled:false}},physics:{enabled:false}});syncPositions();initMinimap();network.on('afterDrawing',()=>{drawMinimap();syncZoom();});syncZoom();});
+    network.on('click',params=>{if(params.nodes.length)openNode(params.nodes[0]);else if(params.edges.length)openEdge(params.edges[0]);else closeInspector();});
+    network.on('hoverNode',params=>highlightUpstream(params.node));
+    network.on('blurNode',applyPersistentHighlight);
+    network.on('dragEnd',()=>{syncPositions();drawMinimap();});
+    network.on('zoom',syncZoom);
+    document.getElementById('network').addEventListener('wheel',event=>{event.preventDefault();const scale=network.getScale();if(event.ctrlKey||event.metaKey){const next=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,scale*Math.exp(-event.deltaY*.0015)));const rect=event.currentTarget.getBoundingClientRect(),anchor=network.DOMtoCanvas({x:event.clientX-rect.left,y:event.clientY-rect.top}),pos=network.getViewPosition(),k=1-scale/next;network.moveTo({scale:next,position:{x:pos.x+(anchor.x-pos.x)*k,y:pos.y+(anchor.y-pos.y)*k}});}else{const pos=network.getViewPosition();network.moveTo({position:{x:pos.x-event.deltaX/scale,y:pos.y-event.deltaY/scale}});}drawMinimap();},{passive:false});
+    setTimeout(openingView,300);
+  }
+
+  function traversable(edge){return edgeTraversable(edge);}
+  function collectUpstream(start){const parents=new Map();config.edges.filter(traversable).forEach(edge=>{if(!parents.has(edge.to))parents.set(edge.to,[]);parents.get(edge.to).push(edge.from);});const seen=new Set([start]),pending=[start];while(pending.length){(parents.get(pending.pop())||[]).forEach(id=>{if(!seen.has(id)){seen.add(id);pending.push(id);}});}return seen;}
+  function highlightUpstream(start){if(!nodesData)return;const upstream=collectUpstream(start),palette=edgePalette();nodesData.update(config.nodes.map(node=>({id:node.id,opacity:upstream.has(node.id)?1:.2})));edgesData.update(config.edges.map(edge=>{const active=traversable(edge)&&upstream.has(edge.from)&&upstream.has(edge.to);const style=edgeStyle(edge);return{id:edge.id,color:{color:active?palette.active:traversable(edge)?palette.dim:style.color.color},width:active?2.6:style.width};}));}
+  function applyFilter(){if(!nodesData)return;if(activeFilterId==='all'){clearHighlight();return;}const item=(config.filters||[]).find(entry=>entry.id===activeFilterId),tags=new Set(item?item.tags:[]),palette=edgePalette();const matches=entry=>(entry.filterTags||[]).some(tag=>tags.has(tag));nodesData.update(config.nodes.map(node=>({id:node.id,opacity:matches(node)?1:.18})));edgesData.update(config.edges.map(edge=>{const active=matches(edge);return{id:edge.id,color:{color:active?palette.active:palette.dim},width:active?2:1};}));}
+  function applyPersistentHighlight(){if(activeEndpointId)highlightUpstream(endpointById.get(activeEndpointId).nodeId);else if(activeNodeId)highlightUpstream(activeNodeId);else if(activeFilterId!=='all')applyFilter();else clearHighlight();}
+  function clearHighlight(){if(!nodesData)return;nodesData.update(config.nodes.map(node=>({id:node.id,opacity:1,color:nodeColor(node),shadow:nodeShadow(node),font:{color:fontColor((node.style&&node.style.color)||layerById.get(node.layerId).color)}})));edgesData.update(config.edges.map(edge=>({id:edge.id,...edgeStyle(edge)})));}
+  function changeFilter(){activeFilterId=document.getElementById('filterSelect').value;activeEndpointId=null;activeNodeId=null;closeInspector();renderEndpoints();applyFilter();}
+
+  function openNode(id,options={}) {const node=nodeById.get(id);if(!node)return;if(options.focus&&document.activeElement!==document.body)inspectorOpener=document.activeElement;inspectorNodeId=id;activeNodeId=activeEndpointId?activeNodeId:id;document.getElementById('inspectorTitle').textContent=node.label;document.getElementById('roleTag').textContent=roleLabel(node);document.getElementById('nodeDescription').textContent=node.description;document.getElementById('onboarding').innerHTML=node.onboardingHtml||'';renderEndpointDetail(id);renderProperties(node);renderRelations(id);updateInspectorNav();document.getElementById('nodeInspector').classList.add('open');split.classList.add('inspector-open');highlightLegend(node.layerId);markNavActive(id);applyPersistentHighlight();announce(`${node.label} details opened.`);setTimeout(()=>resizeGraph(),230);}
+  function openEdge(id){const edge=edgeById.get(id);if(!edge||!edge.explanationHtml){closeInspector();return;}inspectorNodeId=null;document.getElementById('inspectorTitle').textContent=edge.label||edge.type;document.getElementById('roleTag').textContent=edge.type;document.getElementById('nodeDescription').innerHTML=edge.explanationHtml;document.getElementById('onboarding').innerHTML='';document.getElementById('nodeProperties').innerHTML='';document.getElementById('upstreamList').innerHTML='';document.getElementById('downstreamList').innerHTML='';document.getElementById('nodeInspector').classList.add('open');split.classList.add('inspector-open');setTimeout(()=>resizeGraph(),230);}
+  function closeInspector(){const wasOpen=split.classList.contains('inspector-open');document.getElementById('nodeInspector').classList.remove('open');split.classList.remove('inspector-open');inspectorNodeId=null;highlightLegend(null);setTimeout(()=>resizeGraph(),230);if(wasOpen&&inspectorOpener&&document.body.contains(inspectorOpener))inspectorOpener.focus();inspectorOpener=null;}
+  function renderProperties(node){const host=document.getElementById('nodeProperties');host.innerHTML='';const rows=node.displayProperties||fallbackDisplayProperties(node.properties||{});rows.forEach(item=>{if(item.value===null||item.value===undefined||item.value===''||(Array.isArray(item.value)&&!item.value.length))return;const row=document.createElement('div');row.className='property-row';row.innerHTML='<span class="property-label"></span><span class="property-value"></span>';row.children[0].textContent=item.label;row.children[1].textContent=formatPropertyValue(item.value);row.children[1].classList.toggle('multiline',item.multiline===true);host.appendChild(row);});}
+  function fallbackDisplayProperties(properties){return Object.entries(properties).filter(([,value])=>value!==null&&value!==undefined&&value!==''&&(!Array.isArray(value)||value.length)).map(([label,value])=>({label,value,multiline:Array.isArray(value)&&value.some(item=>typeof item==='object'&&item!==null)}));}
+  function formatPropertyValue(value){if(Array.isArray(value)){return value.every(item=>typeof item!=='object'||item===null)?value.join(', '):value.map(item=>formatPropertyValue(item)).join('\n');}if(typeof value==='object'&&value!==null){return Object.entries(value).filter(([,entry])=>entry!==null&&entry!==undefined&&entry!=='').map(([key,entry])=>`${key}: ${formatPropertyValue(entry)}`).join(', ');}return String(value);}
+  function renderEndpointDetail(nodeId){const host=document.getElementById('inspectorEndpointDetail');host.innerHTML='';if(!activeEndpointId)return;const endpoint=endpointById.get(activeEndpointId);if(!endpoint||endpoint.nodeId!==nodeId)return;if(endpoint.technicalLabel){const el=document.createElement('div');el.className='endpoint-technical-label';el.innerHTML='<strong>Target:</strong> <code></code>';el.querySelector('code').textContent=endpoint.technicalLabel;host.appendChild(el);}if(endpoint.summaryHtml){const el=document.createElement('div');el.className='endpoint-summary';el.innerHTML=endpoint.summaryHtml;host.appendChild(el);}if(endpoint.noteHtml){const el=document.createElement('div');el.className='endpoint-note';el.innerHTML=endpoint.noteHtml;host.appendChild(el);}}
+  function directNeighbors(id){const upstream=[],downstream=[];config.edges.filter(traversable).forEach(edge=>{if(edge.to===id)upstream.push(edge.from);if(edge.from===id)downstream.push(edge.to);});return{upstream:[...new Set(upstream)],downstream:[...new Set(downstream)]};}
+  function renderRelations(id){const rel=directNeighbors(id);renderRelationList('upstreamList',rel.upstream,'Nothing upstream in this lineage boundary.');renderRelationList('downstreamList',rel.downstream,'Nothing downstream in this lineage boundary.');}
+  function renderRelationList(hostId,ids,empty){const host=document.getElementById(hostId);host.innerHTML='';if(!ids.length){const li=document.createElement('li');li.className='relation-empty';li.textContent=empty;host.appendChild(li);return;}ids.forEach(id=>{const node=nodeById.get(id),li=document.createElement('li'),button=document.createElement('button');button.className='relation-button';button.innerHTML='<span class="node-dot"></span><span></span>';button.children[0].style.background=layerById.get(node.layerId).color;button.children[1].textContent=node.label;button.addEventListener('click',()=>openNode(id,{focus:true}));li.appendChild(button);host.appendChild(li);});}
+  function navOrder(){return layers.flatMap(layer=>config.nodes.filter(node=>node.layerId===layer.id).map(node=>node.id));}
+  function updateInspectorNav(){const order=navOrder(),index=order.indexOf(inspectorNodeId);document.getElementById('previousNode').disabled=index<=0;document.getElementById('nextNode').disabled=index<0||index>=order.length-1;}
+  function stepInspector(delta){const order=navOrder(),index=order.indexOf(inspectorNodeId),next=Math.max(0,Math.min(order.length-1,index+delta));if(index>=0&&next!==index)openNode(order[next],{focus:true});}
+  function highlightLegend(layerId){document.querySelectorAll('.legend-row').forEach(row=>row.classList.toggle('active',row.dataset.layerId===layerId));}
+
+  function toggleNodeNav(force){const panel=document.getElementById('nodeNav'),open=typeof force==='boolean'?force:panel.hidden;panel.hidden=!open;document.getElementById('nodeNavToggle').setAttribute('aria-expanded',String(open));if(open){document.getElementById('nodeNavSearch').value='';renderNodeNav();document.getElementById('nodeNavSearch').focus();}else document.getElementById('nodeNavToggle').focus();}
+  function renderNodeNav(){const list=document.getElementById('nodeNavList'),query=document.getElementById('nodeNavSearch').value.trim().toLowerCase();list.innerHTML='';navVisibleIds=[];layers.forEach(layer=>{const matches=config.nodes.filter(node=>node.layerId===layer.id&&(!query||node.label.toLowerCase().includes(query)||node.description.toLowerCase().includes(query)));if(!matches.length)return;const heading=document.createElement('div');heading.className='node-nav-group';heading.textContent=layer.label;list.appendChild(heading);matches.forEach(node=>{const option=document.createElement('div');option.id=`nav-${node.id}`;option.className='node-nav-option';option.dataset.nodeId=node.id;option.setAttribute('role','option');option.setAttribute('aria-selected',String(node.id===inspectorNodeId));option.innerHTML='<span class="node-dot"></span><span></span>';option.children[0].style.background=layer.color;option.children[1].textContent=node.label;option.addEventListener('click',()=>openNode(node.id,{focus:true}));list.appendChild(option);navVisibleIds.push(node.id);});});if(!navVisibleIds.length){const empty=document.createElement('div');empty.className='node-nav-empty';empty.textContent=`No nodes match “${query}”.`;list.appendChild(empty);}}
+  function nodeNavKeydown(event){if(!navVisibleIds.length)return;let index=navVisibleIds.indexOf(navFocusId);if(event.key==='ArrowDown'){event.preventDefault();index=Math.min(navVisibleIds.length-1,index+1);}else if(event.key==='ArrowUp'){event.preventDefault();index=Math.max(0,index-1);}else if(event.key==='Home'){event.preventDefault();index=0;}else if(event.key==='End'){event.preventDefault();index=navVisibleIds.length-1;}else if((event.key==='Enter'||event.key===' ')&&index>=0){event.preventDefault();openNode(navVisibleIds[index],{focus:true});return;}else return;navFocusId=navVisibleIds[index];document.querySelectorAll('.node-nav-option').forEach(option=>option.classList.toggle('kb-focus',option.dataset.nodeId===navFocusId));const option=document.getElementById(`nav-${navFocusId}`);event.currentTarget.setAttribute('aria-activedescendant',option.id);option.scrollIntoView({block:'nearest'});}
+  function nodeSearchKeydown(event){if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key)||!navVisibleIds.length)return;event.preventDefault();const list=document.getElementById('nodeNavList');list.focus();navFocusId=null;list.dispatchEvent(new KeyboardEvent('keydown',{key:event.key,bubbles:true,cancelable:true}));}
+  function markNavActive(id){document.querySelectorAll('.node-nav-option').forEach(option=>{const active=option.dataset.nodeId===id;option.classList.toggle('active',active);option.setAttribute('aria-selected',String(active));});}
+
+  const MIN_ZOOM=.15,MAX_ZOOM=2.5,ZOOM_STEPS=1000;
+  function zoomFromSlider(value){return MIN_ZOOM*Math.pow(MAX_ZOOM/MIN_ZOOM,value/ZOOM_STEPS);}
+  function sliderFromZoom(scale){return Math.round(ZOOM_STEPS*Math.log(Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,scale))/MIN_ZOOM)/Math.log(MAX_ZOOM/MIN_ZOOM));}
+  function syncZoom(){if(!network)return;const scale=network.getScale();document.getElementById('zoomSlider').value=sliderFromZoom(scale);document.getElementById('zoomReadout').textContent=`${Math.round(scale*100)}%`;}
+  function setZoomFromSlider(){if(network)network.moveTo({scale:zoomFromSlider(+document.getElementById('zoomSlider').value),position:network.getViewPosition()});}
+  function stepZoom(delta){const slider=document.getElementById('zoomSlider');slider.value=Math.max(0,Math.min(1000,+slider.value+delta*80));setZoomFromSlider();}
+  function openingView(){if(!network)return;const minScale=(report.layout&&report.layout.minReadableScale)||1,start={scale:network.getScale(),position:network.getViewPosition()};network.fit();let target;if(network.getScale()>=minScale){target={scale:network.getScale(),position:network.getViewPosition()};}else{syncPositions();const bounds=graphBounds(),container=document.getElementById('network'),position=bounds?{x:bounds.x0-20+(container.clientWidth/2)/minScale,y:bounds.y0-20+(container.clientHeight/2)/minScale}:network.getViewPosition();target={scale:minScale,position};}network.moveTo({scale:start.scale,position:start.position});network.moveTo({...target,animation:{duration:400}});drawMinimap();}
+  function resizeGraph(){if(network){const el=document.getElementById('network');network.setSize(`${el.clientWidth}px`,`${el.clientHeight}px`);network.redraw();drawMinimap();}}
+
+  function syncPositions(){if(network)graphPositions=network.getPositions();}
+  function graphBounds(){const entries=Object.entries(graphPositions);if(!entries.length)return null;const halfSize=id=>nodeById.get(id).role==='dpe'?{x:160,y:22}:{x:100,y:17};return{x0:Math.min(...entries.map(([id,p])=>p.x-halfSize(id).x)),x1:Math.max(...entries.map(([id,p])=>p.x+halfSize(id).x)),y0:Math.min(...entries.map(([id,p])=>p.y-halfSize(id).y)),y1:Math.max(...entries.map(([id,p])=>p.y+halfSize(id).y))};}
+  function minimapTransform(){const canvas=document.getElementById('minimapCanvas'),bounds=graphBounds();if(!bounds)return null;const pad=8,width=canvas.width,height=canvas.height,scale=Math.min((width-2*pad)/Math.max(1,bounds.x1-bounds.x0),(height-2*pad)/Math.max(1,bounds.y1-bounds.y0));return{bounds,scale,x:x=>pad+(x-bounds.x0)*scale,y:y=>pad+(y-bounds.y0)*scale};}
+  function drawMinimap(){if(!network||document.getElementById('minimap').classList.contains('hidden'))return;syncPositions();const canvas=document.getElementById('minimapCanvas'),ctx=canvas.getContext('2d'),tx=minimapTransform();ctx.clearRect(0,0,canvas.width,canvas.height);if(!tx)return;config.edges.forEach(edge=>{const a=graphPositions[edge.from],b=graphPositions[edge.to];if(!a||!b)return;ctx.strokeStyle=edgeStyle(edge).color.color;ctx.setLineDash(edge.type==='data_flow'?[]:[3,3]);ctx.beginPath();ctx.moveTo(tx.x(a.x),tx.y(a.y));ctx.lineTo(tx.x(b.x),tx.y(b.y));ctx.stroke();});config.nodes.forEach(node=>{const p=graphPositions[node.id];if(!p)return;ctx.fillStyle=(node.style&&node.style.color)||layerById.get(node.layerId).color;ctx.fillRect(tx.x(p.x)-2,tx.y(p.y)-2,4,4);});ctx.setLineDash([]);const rect=document.getElementById('network').getBoundingClientRect(),tl=network.DOMtoCanvas({x:0,y:0}),br=network.DOMtoCanvas({x:rect.width,y:rect.height});ctx.strokeStyle='#f57c00';ctx.lineWidth=1.5;ctx.strokeRect(tx.x(tl.x),tx.y(tl.y),tx.x(br.x)-tx.x(tl.x),tx.y(br.y)-tx.y(tl.y));}
+  function initMinimap(){const canvas=document.getElementById('minimapCanvas'),layout=report.layout||{};canvas.width=layout.minimapWidth||220;canvas.height=layout.minimapHeight||115;const move=event=>{const tx=minimapTransform();if(!tx)return;const rect=canvas.getBoundingClientRect(),x=(event.clientX-rect.left-8)/tx.scale+tx.bounds.x0,y=(event.clientY-rect.top-8)/tx.scale+tx.bounds.y0;network.moveTo({position:{x,y}});};canvas.addEventListener('pointerdown',event=>{canvas.setPointerCapture(event.pointerId);move(event);});canvas.addEventListener('pointermove',event=>{if(canvas.hasPointerCapture(event.pointerId))move(event);});drawMinimap();}
+  function setMinimapVisible(visible){document.getElementById('minimap').classList.toggle('hidden',!visible);const button=document.getElementById('minimapToggle');button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Hide minimap':'Show minimap');if(visible)drawMinimap();}
+
+  function setTheme(theme){document.body.classList.toggle('dark-theme',theme==='dark');const button=document.getElementById('themeToggle');button.textContent=theme==='dark'?'Light':'Dark';button.setAttribute('aria-label',theme==='dark'?'Switch to light theme':'Switch to dark theme');if(nodesData)clearHighlight();drawMinimap();}
+  function setEndpointCollapsed(collapsed){split.classList.toggle('endpoint-collapsed',collapsed);const button=document.getElementById('collapseEndpoints');button.textContent=collapsed?'›':'‹';button.setAttribute('aria-pressed',String(collapsed));button.setAttribute('aria-label',collapsed?'Expand endpoint panel':'Collapse endpoint panel');setTimeout(resizeGraph,20);}
+  function setPaneWidth(kind,value){const min=kind==='endpoint'?240:300,max=680,width=Math.max(min,Math.min(max,value));split.style.setProperty(kind==='endpoint'?'--endpoint-width':'--inspector-width',`${width}px`);document.getElementById(kind==='endpoint'?'endpointResizer':'inspectorResizer').setAttribute('aria-valuenow',String(Math.round(width)));resizeGraph();return width;}
+  function restorePreferences(){setTheme(safeStorageGet(storageKey('theme'))||'light');setMinimapVisible(safeStorageGet(storageKey('minimap'))!=='hidden');setEndpointCollapsed(safeStorageGet(storageKey('endpoint-collapsed'))==='true');setPaneWidth('endpoint',+(safeStorageGet(storageKey('endpoint-width'))||320));setPaneWidth('inspector',+(safeStorageGet(storageKey('inspector-width'))||420));}
+  function bindResizer(id,kind){const resizer=document.getElementById(id);let dragging=false;resizer.addEventListener('pointerdown',event=>{dragging=true;resizer.setPointerCapture(event.pointerId);});resizer.addEventListener('pointermove',event=>{if(!dragging)return;const width=kind==='endpoint'?event.clientX:innerWidth-event.clientX;setPaneWidth(kind,width);});resizer.addEventListener('pointerup',()=>{dragging=false;safeStorageSet(storageKey(`${kind}-width`),resizer.getAttribute('aria-valuenow'));});resizer.addEventListener('keydown',event=>{if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();const direction=event.key==='ArrowRight'?1:-1,visual=kind==='endpoint'?direction:-direction,width=setPaneWidth(kind,+resizer.getAttribute('aria-valuenow')+visual*10);safeStorageSet(storageKey(`${kind}-width`),String(width));});}
+
+  function openHelp(){helpOpener=document.activeElement;document.getElementById('helpOverlay').classList.add('open');document.getElementById('helpClose').focus();}
+  function closeHelp(){document.getElementById('helpOverlay').classList.remove('open');if(helpOpener)helpOpener.focus();helpOpener=null;}
+  function trapHelp(event){if(event.key==='Escape'){closeHelp();return;}if(event.key!=='Tab')return;const dialog=event.currentTarget.querySelector('.help-dialog'),items=[...dialog.querySelectorAll('button,[href],input,select,[tabindex]:not([tabindex="-1"])')].filter(item=>!item.disabled);if(!items.length)return;const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}
+
+  function bindControls(){document.getElementById('groupSelect').addEventListener('change',changeGroup);document.getElementById('filterSelect').addEventListener('change',changeFilter);document.getElementById('clearSelection').addEventListener('click',clearSelection);document.getElementById('nodeNavToggle').addEventListener('click',()=>toggleNodeNav());document.getElementById('nodeNavClose').addEventListener('click',()=>toggleNodeNav(false));document.getElementById('nodeNavSearch').addEventListener('input',renderNodeNav);document.getElementById('nodeNavSearch').addEventListener('keydown',nodeSearchKeydown);document.getElementById('nodeNavList').addEventListener('keydown',nodeNavKeydown);document.getElementById('helpButton').addEventListener('click',openHelp);document.getElementById('helpClose').addEventListener('click',closeHelp);document.getElementById('helpOverlay').addEventListener('click',event=>{if(event.target===event.currentTarget)closeHelp();});document.getElementById('helpOverlay').addEventListener('keydown',trapHelp);document.getElementById('inspectorClose').addEventListener('click',closeInspector);document.getElementById('previousNode').addEventListener('click',()=>stepInspector(-1));document.getElementById('nextNode').addEventListener('click',()=>stepInspector(1));document.getElementById('fitGraph').addEventListener('click',()=>network&&network.fit({animation:{duration:350}}));document.getElementById('resetGraph').addEventListener('click',openingView);document.getElementById('zoomSlider').addEventListener('input',setZoomFromSlider);document.getElementById('zoomOut').addEventListener('click',()=>stepZoom(-1));document.getElementById('zoomIn').addEventListener('click',()=>stepZoom(1));document.getElementById('minimapToggle').addEventListener('click',()=>{const visible=document.getElementById('minimap').classList.contains('hidden');setMinimapVisible(visible);safeStorageSet(storageKey('minimap'),visible?'shown':'hidden');});document.getElementById('themeToggle').addEventListener('click',()=>{const theme=isDark()?'light':'dark';setTheme(theme);safeStorageSet(storageKey('theme'),theme);});document.getElementById('collapseEndpoints').addEventListener('click',()=>{const collapsed=!split.classList.contains('endpoint-collapsed');setEndpointCollapsed(collapsed);safeStorageSet(storageKey('endpoint-collapsed'),String(collapsed));});bindResizer('endpointResizer','endpoint');bindResizer('inspectorResizer','inspector');document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.getElementById('nodeNav').hidden)toggleNodeNav(false);});}
+
+  initializeDocument();
+  if(visAvailable)initGraph();else{document.getElementById('network').style.display='none';document.getElementById('minimap').style.display='none';document.getElementById('legend').style.display='none';document.getElementById('graphFallback').style.display='block';document.querySelectorAll('.graph-controls button,.graph-controls select,.graph-controls input').forEach(control=>control.disabled=true);}
+})();
+</script>
+</body>
+</html>

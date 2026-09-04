@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "1.0",
+  "report": {
+    "id": "channel-signal-provenance",
+    "title": "Channel Signal Provenance",
+    "environment": "TEST",
+    "verifiedDate": "2026-08-01",
+    "groupSelectorLabel": "Signal Family",
+    "leftPaneTitle": "Signal Outputs",
+    "endpointHeader": "Signal",
+    "graphDescription": "Two signal branches share a reference source and write separate fields.",
+    "lineageBoundary": "strict_writeback",
+    "initialGroupId": "engagement",
+    "initialFilterId": "engagement-filter"
+  },
+  "layers": [
+    {"id": "shared-reference", "label": "Shared Reference", "color": "#73c0de", "order": 1},
+    {"id": "branch-calculation", "label": "Branch Calculation", "color": "#3ba272", "order": 2},
+    {"id": "writeback-layer", "label": "Writebacks", "color": "#fc8452", "order": 3},
+    {"id": "field-layer", "label": "Fields", "color": "#ea7ccc", "order": 4}
+  ],
+  "groups": [
+    {"id": "engagement", "label": "Engagement", "endpointIds": ["engagement-score"], "filterTags": ["engagement"]},
+    {"id": "retention", "label": "Retention", "endpointIds": ["retention-score"], "filterTags": ["retention"]}
+  ],
+  "filters": [
+    {"id": "engagement-filter", "label": "Engagement branch", "tags": ["engagement"]},
+    {"id": "retention-filter", "label": "Retention branch", "tags": ["retention"]}
+  ],
+  "endpoints": [
+    {"id": "engagement-score", "groupId": "engagement", "nodeId": "field-engagement", "label": "Engagement Score"},
+    {"id": "retention-score", "groupId": "retention", "nodeId": "field-retention", "label": "Retention Score"}
+  ],
+  "nodes": [
+    {"id": "dmo-channel", "label": "Channel_Reference__dlm", "role": "dmo", "layerId": "shared-reference", "groups": ["engagement", "retention"], "filterTags": ["engagement", "retention"], "description": "Shared channel reference.", "evidenceIds": ["dmo"]},
+    {"id": "ci-engagement", "label": "Engagement_Signal__cio", "role": "ci", "layerId": "branch-calculation", "groups": ["engagement"], "filterTags": ["engagement"], "description": "Calculates engagement.", "evidenceIds": ["sql-engagement"]},
+    {"id": "ci-retention", "label": "Retention_Signal__cio", "role": "ci", "layerId": "branch-calculation", "groups": ["retention"], "filterTags": ["retention"], "description": "Calculates retention.", "evidenceIds": ["sql-retention"]},
+    {"id": "wb-engagement", "label": "Engagement writeback", "role": "writeback", "layerId": "writeback-layer", "groups": ["engagement"], "filterTags": ["engagement"], "description": "Writes engagement.", "properties": {"sequence": 1, "sourceName": "Engagement_Signal__cio", "targetObject": "Channel_Summary__c", "operation": "Upsert", "upsertKey": "Channel_Key__c"}, "evidenceIds": ["dpe"]},
+    {"id": "wb-retention", "label": "Retention writeback", "role": "writeback", "layerId": "writeback-layer", "groups": ["retention"], "filterTags": ["retention"], "description": "Writes retention.", "properties": {"sequence": 2, "sourceName": "Retention_Signal__cio", "targetObject": "Channel_Summary__c", "operation": "Upsert", "upsertKey": "Channel_Key__c"}, "evidenceIds": ["dpe"]},
+    {"id": "field-engagement", "label": "Engagement_Score__c", "role": "target_field", "layerId": "field-layer", "groups": ["engagement"], "filterTags": ["engagement"], "description": "Engagement field.", "evidenceIds": ["describe"]},
+    {"id": "field-retention", "label": "Retention_Score__c", "role": "target_field", "layerId": "field-layer", "groups": ["retention"], "filterTags": ["retention"], "description": "Retention field.", "evidenceIds": ["describe"]}
+  ],
+  "edges": [
+    {"id": "mb1", "from": "dmo-channel", "to": "ci-engagement", "type": "data_flow", "groups": ["engagement"], "filterTags": ["engagement"], "evidenceIds": ["sql-engagement"]},
+    {"id": "mb2", "from": "dmo-channel", "to": "ci-retention", "type": "data_flow", "groups": ["retention"], "filterTags": ["retention"], "evidenceIds": ["sql-retention"]},
+    {"id": "mb3", "from": "ci-engagement", "to": "wb-engagement", "type": "data_flow", "groups": ["engagement"], "filterTags": ["engagement"], "evidenceIds": ["dpe"]},
+    {"id": "mb4", "from": "ci-retention", "to": "wb-retention", "type": "data_flow", "groups": ["retention"], "filterTags": ["retention"], "evidenceIds": ["dpe"]},
+    {"id": "mb5", "from": "wb-engagement", "to": "field-engagement", "type": "data_flow", "groups": ["engagement"], "filterTags": ["engagement"], "evidenceIds": ["dpe"]},
+    {"id": "mb6", "from": "wb-retention", "to": "field-retention", "type": "data_flow", "groups": ["retention"], "filterTags": ["retention"], "evidenceIds": ["dpe"]}
+  ],
+  "sources": [
+    {"id": "dmo", "kind": "dmo_metadata", "artifact": "Channel_Reference__dlm", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "sql-engagement", "kind": "ci_sql", "artifact": "Engagement_Signal__cio", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "sql-retention", "kind": "ci_sql", "artifact": "Retention_Signal__cio", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "dpe", "kind": "dpe_body", "artifact": "Update_Channel_Signals", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "describe", "kind": "sobject_describe", "artifact": "Channel_Summary__c", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"}
+  ]
+}

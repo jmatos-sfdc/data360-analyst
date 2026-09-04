@@ -1,0 +1,94 @@
+{
+  "schemaVersion": "1.0",
+  "report": {
+    "id": "inventory-health-provenance",
+    "title": "Inventory Health Provenance",
+    "environment": "TEST",
+    "verifiedDate": "2026-08-01",
+    "groupSelectorLabel": "Output",
+    "leftPaneTitle": "Target Fields",
+    "endpointHeader": "Field",
+    "graphDescription": "One calculated insight writes one inventory health field.",
+    "lineageBoundary": "strict_writeback",
+    "initialGroupId": "inventory"
+  },
+  "layers": [
+    {"id": "model", "label": "Data Model", "color": "#5470c6", "order": 1},
+    {"id": "calculation", "label": "Calculated Insight", "color": "#91cc75", "order": 2},
+    {"id": "delivery", "label": "Writeback", "color": "#fac858", "order": 3},
+    {"id": "destination", "label": "Destination", "color": "#ee6666", "order": 4}
+  ],
+  "groups": [
+    {"id": "inventory", "label": "Inventory", "endpointIds": ["health-score"]}
+  ],
+  "endpoints": [
+    {
+      "id": "health-score",
+      "groupId": "inventory",
+      "nodeId": "field-health-score",
+      "label": "Health Score",
+      "technicalLabel": "Health_Score__c"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "dmo-inventory",
+      "label": "Inventory__dlm",
+      "role": "dmo",
+      "layerId": "model",
+      "groups": ["inventory"],
+      "description": "Inventory model object.",
+      "claimStatus": "verified",
+      "evidenceIds": ["e-dmo"]
+    },
+    {
+      "id": "ci-health",
+      "label": "Inventory_Health__cio",
+      "role": "ci",
+      "layerId": "calculation",
+      "groups": ["inventory"],
+      "description": "Calculates one health score per inventory location.",
+      "claimStatus": "verified",
+      "evidenceIds": ["e-ci-sql", "e-ci-meta"]
+    },
+    {
+      "id": "wb-health",
+      "label": "Inventory health writeback",
+      "role": "writeback",
+      "layerId": "delivery",
+      "groups": ["inventory"],
+      "description": "Upserts the health score.",
+      "properties": {
+        "sequence": 1,
+        "sourceName": "Inventory_Health__cio",
+        "targetObject": "Inventory_Summary__c",
+        "operation": "Upsert",
+        "upsertKey": "Inventory_Key__c"
+      },
+      "claimStatus": "verified",
+      "evidenceIds": ["e-dpe"]
+    },
+    {
+      "id": "field-health-score",
+      "label": "Health_Score__c",
+      "role": "target_field",
+      "layerId": "destination",
+      "groups": ["inventory"],
+      "description": "Health score stored on the destination object.",
+      "claimStatus": "verified",
+      "evidenceIds": ["e-sobject"]
+    }
+  ],
+  "edges": [
+    {"id": "e1", "from": "dmo-inventory", "to": "ci-health", "type": "data_flow", "groups": ["inventory"], "evidenceIds": ["e-ci-sql"]},
+    {"id": "e2", "from": "ci-health", "to": "wb-health", "type": "data_flow", "groups": ["inventory"], "evidenceIds": ["e-dpe"]},
+    {"id": "e3", "from": "wb-health", "to": "field-health-score", "type": "data_flow", "groups": ["inventory"], "evidenceIds": ["e-dpe"]}
+  ],
+  "sources": [
+    {"id": "e-dmo", "kind": "dmo_metadata", "artifact": "Inventory__dlm", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "e-ci-sql", "kind": "ci_sql", "artifact": "Inventory_Health__cio", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "e-ci-meta", "kind": "ci_metadata", "artifact": "Inventory_Health__cio", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "e-dpe", "kind": "dpe_body", "artifact": "Update_Inventory_Health", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"},
+    {"id": "e-sobject", "kind": "sobject_describe", "artifact": "Inventory_Summary__c", "verifiedAt": "2026-08-01T12:00:00Z", "status": "verified"}
+  ]
+}

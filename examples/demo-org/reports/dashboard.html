@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AcmeRetail — Data360 Analyst Dashboard</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --code-bg: #f3f4f6;
+  --table-stripe: #f9fafb;
+  --card-bg: #ffffff;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --tab-bg: #f3f4f6;
+  --tab-active: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111827;
+    --fg: #f3f4f6;
+    --muted: #9ca3af;
+    --border: #374151;
+    --accent: #60a5fa;
+    --code-bg: #1f2937;
+    --table-stripe: #1f2937;
+    --card-bg: #1f2937;
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --tab-bg: #1f2937;
+    --tab-active: #374151;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--bg);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+h1 {
+  font-size: 1.6rem;
+  margin-bottom: 0.25rem;
+}
+h1 + .meta {
+  color: var(--muted);
+  font-size: 0.9em;
+  margin-bottom: 1rem;
+}
+.hint {
+  color: var(--muted);
+  font-size: 0.85em;
+  margin: 0.25rem 0 0.75rem;
+}
+h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+h4 { font-size: 1rem; margin: 1rem 0 0.3rem; color: var(--muted); }
+p { margin: 0.4rem 0; }
+a { color: var(--accent); text-decoration: none; }
+code {
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+ul { margin: 0.3rem 0 0.3rem 1.5rem; }
+li { margin: 0.15rem 0; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: var(--card-shadow);
+}
+.stat-number { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+.stat-label { font-size: 0.85em; color: var(--muted); margin-top: 0.2rem; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.88em;
+}
+th, td {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+th { background: var(--code-bg); font-weight: 600; }
+tr:nth-child(even) { background: var(--table-stripe); }
+td.num, th.num { text-align: right; }
+
+/* CI audit cards */
+.ci-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: var(--card-bg);
+}
+.ci-card h4 { margin: 0 0 0.5rem; color: var(--fg); }
+.ci-card .clean { color: var(--muted); font-style: italic; }
+
+/* Collapsibles */
+details { margin: 0.5rem 0; }
+summary {
+  cursor: pointer;
+  padding: 0.4rem 0;
+  font-size: 0.95em;
+}
+summary:hover { color: var(--accent); }
+
+/* Badges */
+.badge { display: inline-block; white-space: nowrap; }
+
+/* Charts */
+.chart-container {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.chart-row {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.chart-row > div { flex: 1; min-width: 280px; }
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.88em;
+}
+.legend-item { display: flex; align-items: center; gap: 0.4rem; }
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.chart-scroll { overflow-x: auto; }
+
+/* ---- CSS-only tabs via radio buttons ---- */
+.tabs { margin-top: 1rem; }
+.tabs input[type="radio"] { display: none; }
+.tab-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1rem;
+}
+.tab-labels label {
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95em;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-labels label:hover { color: var(--fg); }
+.tab-panel { display: none; }
+
+/* Activate selected tab — per-tab selectors are appended at render time */
+
+/* Print: expand all tabs */
+@media print {
+  body { max-width: none; padding: 0; font-size: 12px; }
+  .tab-labels { display: none; }
+  .tab-panel { display: block !important; page-break-inside: avoid; margin-bottom: 2rem; }
+  .tab-panel::before {
+    content: attr(data-tab-title);
+    display: block;
+    font-size: 1.3rem;
+    font-weight: 700;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.75rem;
+  }
+  .stat-card { box-shadow: none; border: 1px solid #ccc; }
+}
+
+#tab1:checked ~ .tab-labels label[for="tab1"],
+#tab2:checked ~ .tab-labels label[for="tab2"],
+#tab3:checked ~ .tab-labels label[for="tab3"],
+#tab4:checked ~ .tab-labels label[for="tab4"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+#tab1:checked ~ .tab-panels > .tab-panel:nth-child(1),
+#tab2:checked ~ .tab-panels > .tab-panel:nth-child(2),
+#tab3:checked ~ .tab-panels > .tab-panel:nth-child(3),
+#tab4:checked ~ .tab-panels > .tab-panel:nth-child(4) {
+  display: block;
+}
+
+</style>
+</head>
+<body>
+<h1>AcmeRetail — Data360 Analyst Dashboard</h1>
+<div class="tabs">
+<input type="radio" name="tabs" id="tab1" checked>
+<input type="radio" name="tabs" id="tab2">
+<input type="radio" name="tabs" id="tab3">
+<input type="radio" name="tabs" id="tab4">
+
+<div class="tab-labels"><label for="tab1">Overview</label><label for="tab2">Architecture</label><label for="tab3">CI Audit</label><label for="tab4">CI Convert</label></div>
+<div class="tab-panels"><div class="tab-panel" data-tab-title="Overview"><p class="meta">Org: <strong>acme-demo</strong> &middot; API v67.0 &middot; Snapshot: 2026-05-25T09:00:00</p><div class="stat-grid"><div class="stat-card"><div class="stat-number">4</div><div class="stat-label">DMOs</div></div><div class="stat-card"><div class="stat-number">8</div><div class="stat-label">Calculated Insights</div></div><div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Data Transforms</div></div><div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Segments</div></div><div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Data Streams</div></div><div class="stat-card"><div class="stat-number">0</div><div class="stat-label">IR Rulesets</div></div></div><div class="chart-row"><div><div class="chart-container"><svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><path d="M 100.00 15.00 A 85.0 85.0 0 1 1 39.90 39.90 L 63.94 63.94 A 51.0 51.0 0 1 0 100.00 49.00 Z" fill="#059669"/><path d="M 39.90 39.90 A 85.0 85.0 0 0 1 100.00 15.00 L 100.00 49.00 A 51.0 51.0 0 0 0 63.94 63.94 Z" fill="#6b7280"/><text x="100.0" y="92.0" text-anchor="middle" fill="var(--fg)" font-size="24" font-weight="700">8</text><text x="100.0" y="112.0" text-anchor="middle" fill="var(--muted)" font-size="12">CIs</text></svg><div class="legend"><span class="legend-item"><span class="legend-dot" style="background:#059669"></span>Active: 7 (88%)</span><span class="legend-item"><span class="legend-dot" style="background:#6b7280"></span>Draft: 1 (12%)</span></div></div></div><div><div class="chart-container"><svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100.0" cy="100.0" r="85.00" fill="#2563eb"/><circle cx="100.0" cy="100.0" r="51.00" fill="var(--bg)"/><text x="100.0" y="92.0" text-anchor="middle" fill="var(--fg)" font-size="24" font-weight="700">8</text><text x="100.0" y="112.0" text-anchor="middle" fill="var(--muted)" font-size="12">by type</text></svg><div class="legend"><span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>Calculated Metric: 8 (100%)</span></div></div></div></div><h3>DMO Categories</h3><div class="chart-scroll"><svg width="500" height="74" viewBox="0 0 500 74" xmlns="http://www.w3.org/2000/svg"><text x="212" y="21.799999999999997" text-anchor="end" fill="var(--fg)" font-size="12">PROFILE</text><rect x="220" y="7" width="220.0" height="20" rx="3" fill="#2563eb" opacity="0.85"/><text x="446.0" y="21.799999999999997" fill="var(--muted)" font-size="12">2</text><text x="212" y="53.8" text-anchor="end" fill="var(--fg)" font-size="12">ENGAGEMENT</text><rect x="220" y="39" width="220.0" height="20" rx="3" fill="#059669" opacity="0.85"/><text x="446.0" y="53.8" fill="var(--muted)" font-size="12">2</text></svg></div></div>
+<div class="tab-panel" data-tab-title="Architecture"><h3>Top DMOs by Field Count</h3><table><thead><tr>
+<th class="">DMO</th>
+<th class="">Category</th>
+<th class="num">Fields</th>
+</tr></thead><tbody>
+<tr>
+<td class=""><code>Account__dlm</code></td>
+<td class="">PROFILE</td>
+<td class="num">8</td>
+</tr>
+<tr>
+<td class=""><code>SalesOrder__dlm</code></td>
+<td class="">ENGAGEMENT</td>
+<td class="num">7</td>
+</tr>
+<tr>
+<td class=""><code>ssot__Individual__dlm</code></td>
+<td class="">PROFILE</td>
+<td class="num">6</td>
+</tr>
+<tr>
+<td class=""><code>Email_Unsubscribes__dlm</code></td>
+<td class="">ENGAGEMENT</td>
+<td class="num">3</td>
+</tr>
+</tbody></table></div>
+<div class="tab-panel" data-tab-title="CI Audit"><div class="stat-grid"><div class="stat-card"><div class="stat-number">8</div><div class="stat-label">CIs Audited</div></div><div class="stat-card"><div class="stat-number">23</div><div class="stat-label">Total Findings</div></div><div class="stat-card"><div class="stat-number">8</div><div class="stat-label">CIs with Findings</div></div><div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Clean CIs</div></div></div><h3>Summary by check</h3><table><thead><tr>
+<th class="">Check</th>
+<th class="num">Files affected</th>
+</tr></thead><tbody>
+<tr>
+<td class="">Files with single-day trigger equality</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files with leap-year `MONTH()/DAY()` pattern</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files with no `*_Unsubscribes__dlm` LEFT JOIN</td>
+<td class="num">7</td>
+</tr>
+<tr>
+<td class="">Files with hardcoded RecordType ID literals</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files using unsupported functions (MEDIAN, COALESCE, NVL, etc.)</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files using `COUNT(DISTINCT)`</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files using `COUNT(*)` (discouraged by docs, accepted by parser)</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with `TRY_CONVERT_CURRENCY` wrong arity (must be 3-arg)</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files referencing DLOs (`__dll`) in FROM/JOIN</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with DMO/CIO table aliases</td>
+<td class="num">2</td>
+</tr>
+<tr>
+<td class="">Files with self-joins (DMO appears twice in same scope)</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files with top-level `DISTINCT`</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with top-level `ORDER BY`</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files with top-level CTE (`WITH ... AS`)</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with `EXISTS (...)` subqueries</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with `IN (SELECT col)` (unaliased inner column)</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files with `Foo AS Foo` (alias = source field name)</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files using `||` string-concat operator</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with double-quoted identifiers</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with `DATEDIFF` inside `CASE`</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with `AVG(CASE ...)` nesting</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files with `CASE` mixing NULL with concrete types</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files reusing an aliased `NTILE` result in `CASE`</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with `CDP*` family inside an aggregation</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with CONCAT-aggregate provenance trap</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files with same predicate in JOIN ON and WHERE</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files with a derived expression repeated 3+ times</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">Files duplicating a filter their input CI already enforces</td>
+<td class="num">0</td>
+</tr>
+<tr>
+<td class="">Files exceeding doc-recommended limits (50 measures / 10 dimensions / 5 JOINs)</td>
+<td class="num">0</td>
+</tr>
+</tbody></table><div class="chart-container"><svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><path d="M 100.00 15.00 A 85.0 85.0 0 1 1 88.43 184.21 L 93.06 150.52 A 51.0 51.0 0 1 0 100.00 49.00 Z" fill="#dc2626"/><path d="M 88.43 184.21 A 85.0 85.0 0 0 1 24.53 60.89 L 54.72 76.54 A 51.0 51.0 0 0 0 93.06 150.52 Z" fill="#d97706"/><path d="M 24.53 60.89 A 85.0 85.0 0 0 1 100.00 15.00 L 100.00 49.00 A 51.0 51.0 0 0 0 54.72 76.54 Z" fill="#2563eb"/><text x="100.0" y="92.0" text-anchor="middle" fill="var(--fg)" font-size="24" font-weight="700">23</text><text x="100.0" y="112.0" text-anchor="middle" fill="var(--muted)" font-size="12">findings</text></svg><div class="legend"><span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>High: 12 (52%)</span><span class="legend-item"><span class="legend-dot" style="background:#d97706"></span>Warning: 7 (30%)</span><span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>Info: 4 (17%)</span></div></div><div class="ci-card"><h4>Account_Parent_Hierarchy__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Warning</span></td>
+<td>⚠ No `*_Unsubscribes__dlm` LEFT JOIN found — confirm this CI is transactional (exempt).</td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**DMO/CIO table alias(es)** — use full DMO names everywhere; aliasing surfaces ambiguous-column errors.<div class="detail"><code>`Account__dlm AS child`</code><br><code>`Account__dlm AS parent`</code></div></td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**Self-join detected** — the same DMO appearing twice at the same scope is not supported. Pre-build a copy in an upstream CI/transform.<div class="detail"><code>`account__dlm`</code></div></td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Active_Customer_Accounts__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Warning</span></td>
+<td>⚠ No `*_Unsubscribes__dlm` LEFT JOIN found — confirm this CI is transactional (exempt).</td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**Hardcoded RecordType ID(s)** — break on sandbox refresh; join to a RecordType DMO + filter on `DeveloperName` or use a portable column-level filter instead.<div class="detail"><code>`&#x27;0123x000000ABCDAA2&#x27;`</code></div></td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Birthday_Email_Audience__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**Leap-year bug** — `MONTH()/DAY()` equality skips Feb-29 birthdays in non-leap years.<div class="detail"><code>`WHERE MONTH(ssot__Individual__dlm.BirthDate__c) = MONTH(CURRENT_DATE) AND DAY(ssot__Individual__dlm.BirthDate__c) = DAY(CURRENT_DATE)`</code></div></td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#2563eb;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Info</span></td>
+<td>`CURRENT_DATE()` called 2 time(s) — evaluates in UTC; verify intent for late-day US events.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Warning</span></td>
+<td>⚠ No `*_Unsubscribes__dlm` LEFT JOIN found — confirm this CI is transactional (exempt).</td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Customer_Order_Summary_QueryEditor__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Warning</span></td>
+<td>⚠ No `*_Unsubscribes__dlm` LEFT JOIN found — confirm this CI is transactional (exempt).</td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**`COUNT(DISTINCT)` — rejected by validator.** Use `APPROX_COUNT_DISTINCT(col)`.<div class="detail"><code>`COUNT(DISTINCT o.Id__c)`</code></div></td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**DMO/CIO table alias(es)** — use full DMO names everywhere; aliasing surfaces ambiguous-column errors.<div class="detail"><code>`Account__dlm AS a`</code><br><code>`ssot__Individual__dlm AS i`</code><br><code>`SalesOrder__dlm AS o`</code></div></td>
+</tr>
+<tr>
+<td>4</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**Top-level `ORDER BY`** — rejected (CI output is unordered). Use a window function for rank columns or sort downstream.<div class="detail"><code>`ORDER BY total_amount__c DESC`</code></div></td>
+</tr>
+<tr>
+<td>5</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**`IN (SELECT col)` without alias** — inner column needs an explicit `AS alias` for the validator to bind its type.<div class="detail"><code>`o.Status__c IN (SELECT Status__c FROM SalesOrder__dlm)`</code></div></td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Customer_Order_Totals__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#2563eb;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Info</span></td>
+<td>Unsubscribe suppression join present:<div class="detail"><code>LEFT JOIN `Email_Unsubscribes__dlm`</code></div></td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#2563eb;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Info</span></td>
+<td>No issues detected.</td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Customer_Profile_Score__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Warning</span></td>
+<td>⚠ No `*_Unsubscribes__dlm` LEFT JOIN found — confirm this CI is transactional (exempt).</td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**Repeated derived expression(s)** — candidate to lift into a column on the input CI or a CTE.<div class="detail"><code>4× `COALESCE(ssot__Individual__dlm.FirstName__c, &#x27;Customer&#x27;)`</code></div></td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>New_Account_Welcome__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**Single-day trigger equality** — a single failed run = permanent miss. Prefer `&gt;= ... AND &lt;` ranges.<div class="detail"><code>Account__dlm.CreatedDate__c = DATE_ADD(CURRENT_DATE, -1)</code></div></td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#2563eb;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Info</span></td>
+<td>`CURRENT_DATE()` called 1 time(s) — evaluates in UTC; verify intent for late-day US events.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Warning</span></td>
+<td>⚠ No `*_Unsubscribes__dlm` LEFT JOIN found — confirm this CI is transactional (exempt).</td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Order_Conversion_Rate__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Finding</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Warning</span></td>
+<td>⚠ No `*_Unsubscribes__dlm` LEFT JOIN found — confirm this CI is transactional (exempt).</td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**Same predicate in JOIN ON and WHERE** — defensive duplication; drop one (or confirm both are intentional).<div class="detail"><code>`SalesOrder__dlm.Status__c = &#x27;Shipped&#x27;`</code></div></td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">High</span></td>
+<td>**`AVG(CASE ...)` nesting** — rejected. Use `SUM(CASE ...) / NULLIF(COUNT(CASE ...), 0)` instead.<div class="detail"><code>`AVG(CASE WHEN SalesOrder__dlm.Status__c = &#x27;Shipped&#x27; THEN SalesOrder__dlm.Amount__c ELSE NULL END)…`</code></div></td>
+</tr>
+</tbody></table></div></div>
+<div class="tab-panel" data-tab-title="CI Convert"><div class="stat-grid"><div class="stat-card"><div class="stat-number">8</div><div class="stat-label">CIs Converted</div></div><div class="stat-card"><div class="stat-number">8</div><div class="stat-label">Auto-fixes</div></div><div class="stat-card"><div class="stat-number">1</div><div class="stat-label">Manual Flags</div></div><div class="stat-card"><div class="stat-number">1</div><div class="stat-label">Remaining Violations</div></div></div><h3>Auto-applied rewrites</h3><table><thead><tr>
+<th class="">Rule</th>
+<th class="num">Occurrences</th>
+</tr></thead><tbody>
+<tr>
+<td class="">dmo_table_alias</td>
+<td class="num">2</td>
+</tr>
+<tr>
+<td class="">count_distinct</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">in_subquery_unaliased</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">top_level_order_by</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">unsupported_function:coalesce</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">unsupported_function:extract</td>
+<td class="num">1</td>
+</tr>
+<tr>
+<td class="">avg_case_nesting</td>
+<td class="num">1</td>
+</tr>
+</tbody></table><h3>Flagged for human review</h3><table><thead><tr>
+<th class="">Rule</th>
+<th class="num">Occurrences</th>
+</tr></thead><tbody>
+<tr>
+<td class="">self_join</td>
+<td class="num">1</td>
+</tr>
+</tbody></table><div class="chart-container"><svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><path d="M 100.00 15.00 A 85.0 85.0 0 1 1 19.16 73.73 L 51.50 84.24 A 51.0 51.0 0 1 0 100.00 49.00 Z" fill="#16a34a"/><path d="M 19.16 73.73 A 85.0 85.0 0 0 1 50.04 31.23 L 70.02 58.74 A 51.0 51.0 0 0 0 51.50 84.24 Z" fill="#d97706"/><path d="M 50.04 31.23 A 85.0 85.0 0 0 1 100.00 15.00 L 100.00 49.00 A 51.0 51.0 0 0 0 70.02 58.74 Z" fill="#dc2626"/><text x="100.0" y="92.0" text-anchor="middle" fill="var(--fg)" font-size="24" font-weight="700">10</text><text x="100.0" y="112.0" text-anchor="middle" fill="var(--muted)" font-size="12">conversion outcomes</text></svg><div class="legend"><span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>Auto: 8 (80%)</span><span class="legend-item"><span class="legend-dot" style="background:#d97706"></span>Flag: 1 (10%)</span><span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>Remaining: 1 (10%)</span></div></div><div class="ci-card"><h4>Account_Parent_Hierarchy__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Note</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>dmo_table_alias</code> × 1<div class="detail">Stripped DMO/CIO table alias(es) and rewrote column qualifiers: Account__dlm, Account__dlm.</div></td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#d97706;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Flag</span></td>
+<td><code>self_join</code> × 1<div class="detail">DMO `account__dlm` appears 2× in the same scope. Self-joins are unsupported — pre-build the second copy in an upstream CI / transform.</div></td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="badge" style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Remaining</span></td>
+<td><code>self_joins (1)</code></td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Customer_Order_Summary_QueryEditor__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Note</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>count_distinct</code> × 1<div class="detail">Replaced COUNT(DISTINCT col) with APPROX_COUNT_DISTINCT(col).</div></td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>dmo_table_alias</code> × 1<div class="detail">Stripped DMO/CIO table alias(es) and rewrote column qualifiers: Account__dlm, SalesOrder__dlm, ssot__Individual__dlm.</div></td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>in_subquery_unaliased</code> × 1<div class="detail">Added explicit aliases to IN(SELECT ...) inner columns.</div></td>
+</tr>
+<tr>
+<td>4</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>top_level_order_by</code> × 1<div class="detail">Removed top-level ORDER BY — CI output is unordered. Sort downstream in segments / BI, or use a window function (ROW_NUMBER, RANK) for rank columns.</div></td>
+</tr>
+<tr>
+<td>5</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>unsupported_function:coalesce</code> × 1<div class="detail">Replaced COALESCE(...) with CI editor-supported equivalent (IFNULL(a, IFNULL(b, c)) — nest for 3+ fallbacks).</div></td>
+</tr>
+<tr>
+<td>6</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>unsupported_function:extract</code> × 1<div class="detail">Replaced EXTRACT(...) with CI editor-supported equivalent (YEAR(date) / MONTH(date) / DAY(date) / HOUR(date)).</div></td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Order_Conversion_Rate__cio.sql</h4><table><thead><tr>
+<th>#</th>
+<th>Severity</th>
+<th>Note</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td><span class="badge" style="background:#059669;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Auto</span></td>
+<td><code>avg_case_nesting</code> × 1<div class="detail">Rewrote AVG(CASE ...) as SUM(CASE ...) / NULLIF(COUNT(CASE ...), 0).</div></td>
+</tr>
+</tbody></table></div><div class="ci-card"><h4>Clean files</h4><p>5 CI(s) needed no conversion and stayed audit-clean.</p></div></div>
+</div>
+</div>
+</body>
+</html>

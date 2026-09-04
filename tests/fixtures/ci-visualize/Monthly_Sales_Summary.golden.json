@@ -1,0 +1,37 @@
+{
+  "_authoredFrom": "tests/fixtures/ci-visualize/sql/Monthly_Sales_Summary__cio.sql — synthetic fixture, traced by hand",
+  "ci": "Monthly_Sales_Summary__cio",
+  "shape": "3-leg FULL JOIN (wd / d / ad), each leg an aggregating subquery over Sales_Ledger__dlm",
+  "scopes": [
+    { "boundAlias": "__root__", "parentAlias": null,       "kind": "root",    "baseSources": ["wd", "d", "ad"] },
+    { "boundAlias": "wd",       "parentAlias": "__root__",  "kind": "derived", "baseSources": ["Sales_Ledger__dlm", "ssot__GoodsProduct__dlm", "ssot__Product__dlm", "Account_Hierarchy__cio", "ssot__Account__dlm", "Region_Assignment__dlm", "co", "sap"] },
+    { "boundAlias": "d",        "parentAlias": "__root__",  "kind": "derived", "baseSources": ["Sales_Ledger__dlm", "ssot__GoodsProduct__dlm", "ssot__Product__dlm", "Account_Hierarchy__cio", "ssot__Account__dlm", "Region_Assignment__dlm", "co", "sap"] },
+    { "boundAlias": "ad",       "parentAlias": "__root__",  "kind": "derived", "baseSources": ["Sales_Ledger__dlm", "ssot__GoodsProduct__dlm", "ssot__Product__dlm", "Account_Hierarchy__cio", "ssot__Account__dlm", "co"] },
+    { "boundAlias": "co",       "parentAlias": "wd",  "kind": "derived", "baseSources": ["ssot__Account__dlm"], "note": "co appears once per leg; alias reused across wd/d/ad. Resolver must scope co to its owning leg, not collapse the three." },
+    { "boundAlias": "sap",      "parentAlias": "wd",  "kind": "derived", "baseSources": ["ssot__Account__dlm"] }
+  ],
+  "scopeNotes": "co and sap are declared once per leg (wd, d, ad). This fixture only pins the wd-leg copies by parent; the invariant test enforces that EVERY co/sap scope has a leg parent, never __root__. This is the multi-leg alias-reuse trap.",
+  "externalId": {
+    "column": null,
+    "status": "not-found",
+    "comment": "No *ExternalId* output column. Grain is CommonOwnerCRMAccountId__c + CRMAccountId__c + TxMonth__c + MaterialId__c."
+  },
+  "legMergeJoins": [
+    { "owningScope": "__root__", "left": "wd", "right": "d",  "type": "FULL", "keys": ["CRMAccountId__c", "ProductId__c", "TxMonth__c"] },
+    { "owningScope": "__root__", "left": "wd", "right": "ad", "type": "FULL", "keys": ["CRMAccountId__c", "ProductId__c", "TxMonth__c"] }
+  ],
+  "regressionAnchors": [
+    {
+      "why": "anti-join in the wd leg: LEFT JOIN Region_Assignment__dlm then WHERE Region_Assignment__dlm.Common_Owner__c IS NULL. Drop is at the wd-scope WHERE.",
+      "filterPredicateContains": "Region_Assignment__dlm.Common_Owner__c IS NULL",
+      "owningScope": "wd",
+      "spanMustFallWithin": "wd.WHERE"
+    }
+  ],
+  "havingExpected": true,
+  "havingComment": "ad leg: HAVING SUM(Sales_Ledger__dlm.assoc_qty__c) <> 0",
+  "findings": {
+    "hardcodedIdExpected": true,
+    "hardcodedIdComment": "'012000000000001AAA' Business Account RecordTypeId__c literal, repeated across legs"
+  }
+}

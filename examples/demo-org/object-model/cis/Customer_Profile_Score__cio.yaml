@@ -1,0 +1,17 @@
+apiName: Customer_Profile_Score__cio
+displayName: Customer Profile Score
+status: ACTIVE
+definitionType: CALCULATED_METRIC
+dataSpace: default
+dimensions:
+- apiName: individual_id__c
+  type: null
+measures:
+- apiName: first_name__c
+  type: null
+- apiName: full_name__c
+  type: null
+- apiName: profile_type__c
+  type: null
+sqlPath: queries/Customer_Profile_Score__cio.sql
+hasExpression: true

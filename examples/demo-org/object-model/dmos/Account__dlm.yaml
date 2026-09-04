@@ -1,0 +1,29 @@
+name: Account__dlm
+label: Account
+category: PROFILE
+fields:
+- name: Id__c
+  type: Text
+  label: Account ID
+  usageTag: PrimaryKey
+- name: Name__c
+  type: Text
+  label: Account Name
+- name: Status__c
+  type: Text
+  label: Status
+- name: RecordTypeId__c
+  type: Text
+  label: Record Type ID
+- name: ParentAccountId__c
+  type: Text
+  label: Parent Account ID
+- name: BirthDate__c
+  type: Date
+  label: Birth Date
+- name: CreatedDate__c
+  type: DateTime
+  label: Created Date
+- name: AnnualRevenue__c
+  type: Number
+  label: Annual Revenue

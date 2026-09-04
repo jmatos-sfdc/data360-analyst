@@ -1,0 +1,13 @@
+apiName: New_Account_Welcome__cio
+displayName: New Account Welcome
+status: ACTIVE
+definitionType: CALCULATED_METRIC
+dataSpace: default
+dimensions:
+- apiName: account_id__c
+  type: null
+measures:
+- apiName: account_name__c
+  type: null
+sqlPath: queries/New_Account_Welcome__cio.sql
+hasExpression: true

@@ -1,0 +1,26 @@
+name: SalesOrder__dlm
+label: Sales Order
+category: ENGAGEMENT
+fields:
+- name: Id__c
+  type: Text
+  label: Order ID
+  usageTag: PrimaryKey
+- name: AccountId__c
+  type: Text
+  label: Account ID
+- name: OrderDate__c
+  type: Date
+  label: Order Date
+- name: Amount__c
+  type: Number
+  label: Amount
+- name: Currency__c
+  type: Text
+  label: Currency ISO
+- name: Status__c
+  type: Text
+  label: Status
+- name: ProductCategory__c
+  type: Text
+  label: Product Category
