@@ -141,3 +141,56 @@ def _connector_depth(node):
     left = _connector_depth(node.this)
     right = _connector_depth(node.expression)
     return 1 + max(left, right)
+
+
+_SIGNAL_WEIGHTS = {"depth": 0.40, "branch": 0.25, "duplication": 0.25, "size": 0.10}
+
+
+def _raw_signals(m):
+    return {
+        "depth": m["subquery_depth"] + m["case_nesting_depth"] + m["cte_chain_length"] + m["join_count"],
+        "branch": m["when_branch_count"] + 2 * m["mixed_type_case_count"] + m["boolean_condition_depth"],
+        "duplication": m["duplication_count"],
+        "size": m["distinct_field_count"] + m["line_count"] / 10.0,
+    }
+
+
+def _percentile_rank(value, all_values):
+    n = len(all_values)
+    if n <= 1:
+        return 0.5
+    rank = sum(1 for v in all_values if v <= value) - 1
+    return rank / (n - 1)
+
+
+def _bucket(score):
+    if score < 25:
+        return "Low"
+    if score < 50:
+        return "Medium"
+    if score < 75:
+        return "High"
+    return "Severe"
+
+
+def normalize_and_score(all_metrics):
+    raw_by_ci = {name: _raw_signals(m) for name, m in all_metrics.items()}
+    signals = list(_SIGNAL_WEIGHTS)
+    values_by_signal = {s: [raw_by_ci[name][s] for name in raw_by_ci] for s in signals}
+
+    results = {}
+    for name, raw in raw_by_ci.items():
+        breakdown = {
+            s: _percentile_rank(raw[s], values_by_signal[s])
+            for s in signals
+        }
+        weighted = {s: breakdown[s] * _SIGNAL_WEIGHTS[s] for s in signals}
+        score = round(100 * sum(weighted.values()))
+        drivers = sorted(signals, key=lambda s: weighted[s], reverse=True)
+        results[name] = {
+            "score": score,
+            "bucket": _bucket(score),
+            "breakdown": breakdown,
+            "drivers": drivers,
+        }
+    return results

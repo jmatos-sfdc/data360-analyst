@@ -147,3 +147,48 @@ def test_collect_duplication_counts_cross_ci():
     }
     counts = ci_complexity.collect_duplication_counts(parsed)
     assert counts["downstream_ci__cio"] >= 1
+
+
+def _metrics(**overrides):
+    base = {
+        "subquery_depth": 0, "case_nesting_depth": 0, "cte_chain_length": 0,
+        "join_count": 0, "when_branch_count": 0, "mixed_type_case_count": 0,
+        "boolean_condition_depth": 0, "distinct_field_count": 0,
+        "line_count": 1, "duplication_count": 0,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_normalize_and_score_ranks_worst_ci_highest():
+    all_metrics = {
+        "simple__cio": _metrics(),
+        "complex__cio": _metrics(subquery_depth=3, case_nesting_depth=3, join_count=5,
+                                  when_branch_count=10, duplication_count=5),
+        "medium__cio": _metrics(join_count=2, when_branch_count=3),
+    }
+    scores = ci_complexity.normalize_and_score(all_metrics)
+    assert scores["complex__cio"]["score"] > scores["medium__cio"]["score"]
+    assert scores["medium__cio"]["score"] > scores["simple__cio"]["score"]
+
+
+def test_normalize_and_score_buckets_are_valid():
+    all_metrics = {"a__cio": _metrics(), "b__cio": _metrics(join_count=5), "c__cio": _metrics(join_count=10)}
+    scores = ci_complexity.normalize_and_score(all_metrics)
+    for result in scores.values():
+        assert result["bucket"] in ("Low", "Medium", "High", "Severe")
+        assert 0 <= result["score"] <= 100
+
+
+def test_normalize_and_score_drivers_reflect_dominant_signal():
+    all_metrics = {
+        "flat__cio": _metrics(),
+        "deep__cio": _metrics(subquery_depth=5, case_nesting_depth=5),
+    }
+    scores = ci_complexity.normalize_and_score(all_metrics)
+    assert scores["deep__cio"]["drivers"][0] == "depth"
+
+
+def test_normalize_and_score_single_ci_does_not_crash():
+    scores = ci_complexity.normalize_and_score({"only__cio": _metrics(join_count=3)})
+    assert scores["only__cio"]["score"] >= 0
