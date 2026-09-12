@@ -360,3 +360,76 @@ def build_report(all_metrics, scores, suggestions, excluded, low_n_warning):
             lines.append("")
 
     return "\n".join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Score CI SQL maintainability and suggest refactors",
+        epilog=(
+            "Pass --output-dir <root> to use the toolkit's standard layout "
+            "(reads <root>/queries/*.sql, writes "
+            "<root>/reports/ci-complexity-report.md). Or pass --queries and "
+            "--output for explicit paths."
+        ),
+    )
+    parser.add_argument("--output-dir", help="Client Data360 root — derives queries/ and reports/ paths")
+    parser.add_argument("--queries", help="Directory of .sql files (overrides --output-dir)")
+    parser.add_argument("--output", help="Path to write the markdown report (overrides --output-dir)")
+    args = parser.parse_args()
+
+    if not args.output_dir and not (args.queries and args.output):
+        parser.error("provide --output-dir, or both --queries and --output")
+
+    q_dir = Path(args.queries).expanduser() if args.queries else Path(args.output_dir).expanduser() / "queries"
+    out_path = (
+        Path(args.output).expanduser()
+        if args.output
+        else Path(args.output_dir).expanduser() / "reports" / "ci-complexity-report.md"
+    )
+
+    if not q_dir.is_dir():
+        print(f"ERROR: queries dir not found: {q_dir}")
+        sys.exit(1)
+
+    parsed = {}
+    raw_sql = {}
+    excluded = {}
+    for sql_path in sorted(q_dir.glob("*.sql")):
+        trees, raw, err = ci_audit.parse_file(sql_path)
+        if err is not None:
+            excluded[sql_path.stem.lower()] = err
+        else:
+            parsed[sql_path.name] = trees
+            raw_sql[sql_path.name] = raw
+
+    if not parsed:
+        print(f"No parseable .sql files under {q_dir}")
+        sys.exit(0)
+
+    duplication_counts = collect_duplication_counts(parsed)
+
+    all_metrics = {}
+    for fname, trees in parsed.items():
+        name = Path(fname).stem.lower()
+        metrics = aggregate_ci_metrics(trees, raw_sql[fname])
+        metrics["duplication_count"] = duplication_counts.get(name, 0)
+        all_metrics[name] = metrics
+
+    scores = normalize_and_score(all_metrics)
+
+    trees_by_name = {Path(fname).stem.lower(): trees for fname, trees in parsed.items()}
+    suggestions = {
+        name: suggest_refactor(name, trees_by_name[name], scores[name])
+        for name in scores
+    }
+
+    report = build_report(
+        all_metrics, scores, suggestions, excluded, low_n_warning=len(parsed) < 3
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(report)
+    print(f"Wrote {out_path}  ({len(parsed)} file(s) scored, {len(excluded)} excluded)")
+
+
+if __name__ == "__main__":
+    main()

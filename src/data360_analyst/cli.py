@@ -18,6 +18,7 @@ from pathlib import Path
 _MODULES = {
     "intake": "data360_analyst.intake",
     "ci-audit": "data360_analyst.ci_audit",
+    "ci-complexity": "data360_analyst.ci_complexity",
     "ci-convert": "data360_analyst.ci_convert",
     "ci-concordance": "data360_analyst.ci_concordance",
     "ci-visualize": "data360_analyst.ci_visualize",

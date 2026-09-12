@@ -95,6 +95,23 @@ def test_analyze_no_org_no_snapshot_exits(monkeypatch):
     assert exc.value.code == 1
 
 
+def test_ci_complexity_subcommand_runs_on_demo_org(tmp_path, monkeypatch):
+    import runpy
+    import sys
+
+    output_dir = tmp_path / "client"
+    (output_dir / "queries").mkdir(parents=True)
+    for sql_file in (DEMO_ORG / "queries").glob("*.sql"):
+        (output_dir / "queries" / sql_file.name).write_text(sql_file.read_text())
+
+    monkeypatch.setattr(sys, "argv", ["ci-complexity", "--output-dir", str(output_dir)])
+    runpy.run_module("data360_analyst.ci_complexity", run_name="__main__")
+
+    report = output_dir / "reports" / "ci-complexity-report.md"
+    assert report.exists()
+    assert "CI Complexity" in report.read_text()
+
+
 def _fixture_snapshot():
     """(relative path, size) for every file under the demo-org fixture."""
     return sorted(
