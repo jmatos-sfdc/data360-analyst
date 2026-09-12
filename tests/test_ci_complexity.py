@@ -206,3 +206,46 @@ def test_normalize_and_score_tied_signal_does_not_all_max_out():
     scores = ci_complexity.normalize_and_score(all_metrics)
     for result in scores.values():
         assert result["breakdown"]["duplication"] == 0.5
+
+
+def test_suggest_refactor_empty_for_low_bucket():
+    result = {"score": 10, "bucket": "Low", "breakdown": {}, "drivers": ["size"]}
+    trees = sqlglot.parse("SELECT a FROM t", read=DIALECT)
+    assert ci_complexity.suggest_refactor("simple__cio", trees, result) == []
+
+
+def test_suggest_refactor_depth_driver_mentions_nested_case():
+    sql = (
+        "SELECT CASE WHEN x=1 THEN (CASE WHEN y=2 THEN 'a' ELSE 'b' END) "
+        "ELSE 'c' END AS f FROM t"
+    )
+    trees = sqlglot.parse(sql, read=DIALECT)
+    result = {"score": 80, "bucket": "Severe", "breakdown": {}, "drivers": ["depth"]}
+    suggestions = ci_complexity.suggest_refactor("nested__cio", trees, result)
+    assert suggestions
+    assert any("CASE" in s for s in suggestions)
+
+
+def test_suggest_refactor_duplication_driver_names_repeated_expression():
+    sql = (
+        "SELECT IFNULL(a.phone_number__c, 'unknown'), "
+        "IFNULL(a.phone_number__c, 'unknown'), "
+        "IFNULL(a.phone_number__c, 'unknown') FROM a"
+    )
+    trees = sqlglot.parse(sql, read=DIALECT)
+    result = {"score": 80, "bucket": "Severe", "breakdown": {}, "drivers": ["duplication"]}
+    suggestions = ci_complexity.suggest_refactor("dup__cio", trees, result)
+    assert suggestions
+    assert any("IFNULL" in s for s in suggestions)
+
+
+def test_suggest_refactor_never_emits_top_level_cte():
+    sql = (
+        "SELECT CASE WHEN x=1 THEN (CASE WHEN y=2 THEN 'a' ELSE 'b' END) "
+        "ELSE 'c' END AS f FROM t"
+    )
+    trees = sqlglot.parse(sql, read=DIALECT)
+    result = {"score": 90, "bucket": "Severe", "breakdown": {}, "drivers": ["depth", "duplication"]}
+    suggestions = ci_complexity.suggest_refactor("nested__cio", trees, result)
+    for s in suggestions:
+        assert "WITH " not in s.upper().replace("WITHIN", "")

@@ -194,3 +194,116 @@ def normalize_and_score(all_metrics):
             "drivers": drivers,
         }
     return results
+
+
+def suggest_refactor(ci_name, trees, score_result):
+    """Prose + (where safe) rewritten-SQL suggestions for the signals that
+    drove this CI's score, for CIs in the High/Severe buckets only. Rewrites
+    never use a top-level CTE — the CI editor rejects `WITH ...`; the safe
+    shape is `FROM (SELECT ...) AS alias`.
+    """
+    if score_result["bucket"] not in ("High", "Severe"):
+        return []
+
+    suggestions = []
+    for driver in score_result["drivers"]:
+        if driver == "depth":
+            suggestions.extend(_suggest_depth_refactor(trees))
+        elif driver == "duplication":
+            suggestions.extend(_suggest_duplication_refactor(trees))
+        elif driver == "branch":
+            suggestions.extend(_suggest_branch_refactor(trees))
+        elif driver == "size":
+            suggestions.extend(_suggest_size_refactor(trees))
+    return suggestions
+
+
+def _suggest_depth_refactor(trees):
+    out = []
+    deepest_case = None
+    deepest_depth = 0
+    for tree in trees:
+        if tree is None:
+            continue
+        for case in tree.find_all(exp.Case):
+            depth = 1
+            parent = case.parent
+            while parent is not None:
+                if isinstance(parent, exp.Case):
+                    depth += 1
+                parent = parent.parent
+            if depth > deepest_depth:
+                deepest_depth, deepest_case = depth, case
+    if deepest_case is not None and deepest_depth >= 2:
+        out.append(
+            "Nested CASE expressions are hard to read and modify safely. "
+            "Flatten the inner CASE into the outer one's WHEN conditions "
+            "(combine using AND), or promote the inner CASE into its own "
+            f"column on the input CI:\n```sql\n{deepest_case.sql(dialect=DIALECT)}\n```"
+        )
+    return out
+
+
+# Label repeated-expression families by their most common source spelling —
+# sqlglot normalizes IFNULL/NVL/COALESCE all to the same Coalesce AST node
+# and always renders it back out as "COALESCE(...)" regardless of dialect,
+# so the original spelling in the CI's source SQL can't be recovered from
+# the parsed tree. Label by family instead of assuming one canonical name.
+_DUP_LABELS = (
+    ("COALESCE(", "IFNULL/COALESCE/NVL"),
+    ("CONCAT(", "CONCAT"),
+    ("CAST(", "CAST"),
+    ("CASE", "CASE"),
+)
+
+
+def _dup_label(expr):
+    upper = expr.upper()
+    for prefix, label in _DUP_LABELS:
+        if upper.startswith(prefix):
+            return label
+    return "expression"
+
+
+def _suggest_duplication_refactor(trees):
+    out = []
+    seen = set()
+    for tree in trees:
+        if tree is None:
+            continue
+        for expr, count in ci_audit.check_repeated_derived_expressions(tree):
+            if expr in seen:
+                continue
+            seen.add(expr)
+            out.append(
+                f"This {_dup_label(expr)} expression — `{expr}` — is repeated "
+                f"{count}+ times across this CI's SELECT/JOIN/GROUP BY/WHERE "
+                "clauses. Promote it into a column on the input CI (preferred), "
+                "or compute it once in a derived subquery — "
+                f"`FROM (SELECT {expr} AS derived_value, ... ) AS src` — never a "
+                "top-level Common Table Expression, which the CI editor rejects."
+            )
+    return out
+
+
+def _suggest_branch_refactor(trees):
+    out = []
+    for tree in trees:
+        if tree is None:
+            continue
+        for hit in ci_audit.check_case_mixed_types(tree):
+            out.append(
+                "This CASE mixes a NULL branch with typed literals, which the "
+                "CI editor's validator rejects. Replace the NULL literal with a "
+                f"typed default (`0`, `0.0`, or `''`):\n```sql\n{hit}\n```"
+            )
+    return out
+
+
+def _suggest_size_refactor(trees):
+    return [
+        "This CI references a large number of distinct fields across a lot of "
+        "SQL. Consider whether it's answering more than one question — "
+        "splitting it into two focused CIs is usually easier to maintain than "
+        "one large one, even though it doesn't reduce a mechanical metric here."
+    ]
