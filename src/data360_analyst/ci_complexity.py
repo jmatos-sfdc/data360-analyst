@@ -157,7 +157,7 @@ def _raw_signals(m):
 
 def _percentile_rank(value, all_values):
     n = len(all_values)
-    if n <= 1:
+    if n <= 1 or min(all_values) == max(all_values):
         return 0.5
     rank = sum(1 for v in all_values if v <= value) - 1
     return rank / (n - 1)

@@ -192,3 +192,17 @@ def test_normalize_and_score_drivers_reflect_dominant_signal():
 def test_normalize_and_score_single_ci_does_not_crash():
     scores = ci_complexity.normalize_and_score({"only__cio": _metrics(join_count=3)})
     assert scores["only__cio"]["score"] >= 0
+
+
+def test_normalize_and_score_tied_signal_does_not_all_max_out():
+    # duplication_count is 0 for every CI (tied) even though other signals vary.
+    # A tied signal has no differentiation and must not degenerate to percentile 1.0
+    # for every entry.
+    all_metrics = {
+        "simple__cio": _metrics(),
+        "medium__cio": _metrics(join_count=2),
+        "complex__cio": _metrics(join_count=5, subquery_depth=3),
+    }
+    scores = ci_complexity.normalize_and_score(all_metrics)
+    for result in scores.values():
+        assert result["breakdown"]["duplication"] == 0.5
