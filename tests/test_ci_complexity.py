@@ -259,3 +259,37 @@ def test_suggest_refactor_branch_driver_no_leaked_with():
     assert suggestions
     for s in suggestions:
         assert "WITH " not in s.upper().replace("WITHIN", "")
+
+
+def test_build_report_ranks_worst_first():
+    scores = {
+        "good__cio": {"score": 10, "bucket": "Low", "breakdown": {}, "drivers": []},
+        "bad__cio": {"score": 90, "bucket": "Severe", "breakdown": {}, "drivers": ["depth"]},
+    }
+    metrics = {"good__cio": _metrics(), "bad__cio": _metrics(subquery_depth=5)}
+    report = ci_complexity.build_report(metrics, scores, {}, {}, low_n_warning=False)
+    assert report.index("bad__cio") < report.index("good__cio")
+
+
+def test_build_report_lists_excluded_parse_errors():
+    scores = {"ok__cio": {"score": 5, "bucket": "Low", "breakdown": {}, "drivers": []}}
+    metrics = {"ok__cio": _metrics()}
+    excluded = {"broken__cio": "syntax error near SELEC"}
+    report = ci_complexity.build_report(metrics, scores, {}, excluded, low_n_warning=False)
+    assert "broken__cio" in report
+    assert "parse error" in report.lower()
+
+
+def test_build_report_includes_low_n_warning():
+    scores = {"only__cio": {"score": 5, "bucket": "Low", "breakdown": {}, "drivers": []}}
+    metrics = {"only__cio": _metrics()}
+    report = ci_complexity.build_report(metrics, scores, {}, {}, low_n_warning=True)
+    assert "too few" in report.lower()
+
+
+def test_build_report_includes_suggestions_for_flagged_ci():
+    scores = {"bad__cio": {"score": 90, "bucket": "Severe", "breakdown": {}, "drivers": ["depth"]}}
+    metrics = {"bad__cio": _metrics(subquery_depth=5)}
+    suggestions = {"bad__cio": ["Nested CASE expressions are hard to read..."]}
+    report = ci_complexity.build_report(metrics, scores, suggestions, {}, low_n_warning=False)
+    assert "Nested CASE expressions" in report

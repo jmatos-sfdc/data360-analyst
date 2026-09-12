@@ -307,3 +307,56 @@ def _suggest_size_refactor(trees):
         "splitting it into two focused CIs is usually easier to maintain than "
         "one large one, even though it doesn't reduce a mechanical metric here."
     ]
+
+
+def build_report(all_metrics, scores, suggestions, excluded, low_n_warning):
+    """Ranked (worst-first) markdown report over `scores`/`suggestions` from
+    `normalize_and_score`/`suggest_refactor`, plus any parse-error exclusions.
+    Scoring is corpus-relative (see methodology note below) — never read a
+    bucket as an absolute quality bar.
+    """
+    lines = ["# CI Complexity / Refactor", ""]
+    lines.append(
+        "_Scores rank each CI against the other CIs in this snapshot only — "
+        "a bucket reflects relative standing within this org, not a universal "
+        "quality bar. A 3-CI org and a 200-CI org will "
+        "calibrate \"Severe\" differently._"
+    )
+    lines.append("")
+
+    if low_n_warning:
+        lines.append(
+            "> **Warning:** too few CIs scored successfully in this snapshot "
+            "for percentile-based ranking to be meaningful. Treat scores "
+            "below as indicative only."
+        )
+        lines.append("")
+
+    ranked = sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True)
+
+    lines.append("## Ranked (worst first)")
+    lines.append("")
+    lines.append("| CI | Score | Bucket | Top driver |")
+    lines.append("|---|---|---|---|")
+    for name, result in ranked:
+        driver = result["drivers"][0] if result["drivers"] else "—"
+        lines.append(f"| {name} | {result['score']} | {result['bucket']} | {driver} |")
+    lines.append("")
+
+    if excluded:
+        lines.append("## Excluded — parse error")
+        lines.append("")
+        for name, err in sorted(excluded.items()):
+            lines.append(f"- **{name}**: parse error — {err}")
+        lines.append("")
+
+    lines.append("## Detail")
+    lines.append("")
+    for name, result in ranked:
+        lines.append(f"### {name} — {result['score']} ({result['bucket']})")
+        lines.append("")
+        for suggestion in suggestions.get(name, []):
+            lines.append(suggestion)
+            lines.append("")
+
+    return "\n".join(lines)
