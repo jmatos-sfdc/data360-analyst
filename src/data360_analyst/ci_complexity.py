@@ -199,7 +199,7 @@ def normalize_and_score(all_metrics):
 def suggest_refactor(ci_name, trees, score_result):
     """Prose + (where safe) rewritten-SQL suggestions for the signals that
     drove this CI's score, for CIs in the High/Severe buckets only. Rewrites
-    never use a top-level CTE — the CI editor rejects `WITH ...`; the safe
+    never use a top-level CTE — the CI editor rejects Common Table Expressions; the safe
     shape is `FROM (SELECT ...) AS alias`.
     """
     if score_result["bucket"] not in ("High", "Severe"):
@@ -293,9 +293,9 @@ def _suggest_branch_refactor(trees):
             continue
         for hit in ci_audit.check_case_mixed_types(tree):
             out.append(
-                "This CASE mixes a NULL branch with typed literals, which the "
-                "CI editor's validator rejects. Replace the NULL literal with a "
-                f"typed default (`0`, `0.0`, or `''`):\n```sql\n{hit}\n```"
+                "This CASE mixes a NULL branch alongside typed literals, which "
+                "the CI editor's validator rejects. Replace the NULL literal "
+                f"using a typed default (`0`, `0.0`, or `''`):\n```sql\n{hit}\n```"
             )
     return out
 

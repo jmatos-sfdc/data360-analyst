@@ -249,3 +249,13 @@ def test_suggest_refactor_never_emits_top_level_cte():
     suggestions = ci_complexity.suggest_refactor("nested__cio", trees, result)
     for s in suggestions:
         assert "WITH " not in s.upper().replace("WITHIN", "")
+
+
+def test_suggest_refactor_branch_driver_no_leaked_with():
+    sql = "SELECT CASE WHEN x = 1 THEN 1.5 ELSE NULL END AS f FROM t"
+    trees = sqlglot.parse(sql, read=DIALECT)
+    result = {"score": 80, "bucket": "Severe", "breakdown": {}, "drivers": ["branch"]}
+    suggestions = ci_complexity.suggest_refactor("mixedtype__cio", trees, result)
+    assert suggestions
+    for s in suggestions:
+        assert "WITH " not in s.upper().replace("WITHIN", "")
