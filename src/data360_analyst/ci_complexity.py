@@ -12,10 +12,10 @@ Usage (matches ci_audit.py):
 """
 
 import argparse
+import statistics
 import sys
 from pathlib import Path
 
-import sqlglot
 from sqlglot import exp
 
 from data360_analyst import ci_audit
@@ -205,8 +205,15 @@ def suggest_refactor(ci_name, trees, score_result):
     if score_result["bucket"] not in ("High", "Severe"):
         return []
 
+    breakdown = score_result.get("breakdown") or {}
+    all_signals = ("depth", "branch", "duplication", "size")
+    contributions = [breakdown.get(s, 0) for s in all_signals]
+    median_contribution = statistics.median(contributions)
+
     suggestions = []
     for driver in score_result["drivers"]:
+        if breakdown.get(driver, 0) < median_contribution:
+            continue  # not a top contributor for this CI — skip to avoid suggestion noise
         if driver == "depth":
             suggestions.extend(_suggest_depth_refactor(trees))
         elif driver == "duplication":
@@ -283,6 +290,16 @@ def _suggest_duplication_refactor(trees):
                 f"`FROM (SELECT {expr} AS derived_value, ... ) AS src` — never a "
                 "top-level Common Table Expression, which the CI editor rejects."
             )
+    if not out:
+        out.append(
+            "This CI's duplication score is driven at least partly by a "
+            "cross-CI redundant filter (the same WHERE/JOIN condition already "
+            "enforced by an upstream CI), not by a repeated expression within "
+            "this CI's own SQL. Check `data360 ci-audit`'s report for a "
+            "\"cross-CI redundant filter\" finding on this CI — that check has "
+            "full corpus context and can name the specific filter and the "
+            "other CI it's shared with."
+        )
     return out
 
 

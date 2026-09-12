@@ -239,6 +239,21 @@ def test_suggest_refactor_duplication_driver_names_repeated_expression():
     assert any("IFNULL" in s for s in suggestions)
 
 
+def test_suggest_refactor_duplication_driver_falls_back_when_no_local_hits():
+    # duplication_count > 0 in score_result, but this CI's own trees have no
+    # check_repeated_derived_expressions hits (the duplication signal here is
+    # driven entirely by a cross-CI redundant filter, which suggest_refactor
+    # has no corpus-wide index to name). Must still emit a non-empty,
+    # duplication-related suggestion instead of going silent.
+    sql = "SELECT b.id FROM b INNER JOIN a ON a.id = b.a_id AND a.status__c = 'Active'"
+    trees = sqlglot.parse(sql, read=DIALECT)
+    result = {"score": 80, "bucket": "Severe", "breakdown": {}, "drivers": ["duplication"]}
+    suggestions = ci_complexity.suggest_refactor("cross_dup__cio", trees, result)
+    assert suggestions
+    assert any("duplication" in s.lower() for s in suggestions)
+    assert any("ci-audit" in s.lower() for s in suggestions)
+
+
 def test_suggest_refactor_never_emits_top_level_cte():
     sql = (
         "SELECT CASE WHEN x=1 THEN (CASE WHEN y=2 THEN 'a' ELSE 'b' END) "
@@ -259,6 +274,25 @@ def test_suggest_refactor_branch_driver_no_leaked_with():
     assert suggestions
     for s in suggestions:
         assert "WITH " not in s.upper().replace("WITHIN", "")
+
+
+def test_suggest_refactor_skips_below_median_signal():
+    # "size" contributes far below the other three (0.05 vs 0.9) — median of
+    # the 4 breakdown values is 0.9, so "size" is below-median and must not
+    # get a suggestion, while the top contributors still do.
+    sql = (
+        "SELECT CASE WHEN x=1 THEN (CASE WHEN y=2 THEN 'a' ELSE 'b' END) "
+        "ELSE 'c' END AS f FROM t"
+    )
+    trees = sqlglot.parse(sql, read=DIALECT)
+    result = {
+        "score": 90,
+        "bucket": "Severe",
+        "breakdown": {"depth": 0.9, "branch": 0.9, "duplication": 0.9, "size": 0.05},
+        "drivers": ["depth", "branch", "duplication", "size"],
+    }
+    suggestions = ci_complexity.suggest_refactor("mixed__cio", trees, result)
+    assert not any("more than one question" in s for s in suggestions)
 
 
 def test_build_report_ranks_worst_first():

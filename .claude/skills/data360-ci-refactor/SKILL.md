@@ -18,8 +18,8 @@ scored the way it did.
 
 This is a different concern from `data360-ci-audit`: audit finds correctness bugs (leap-year traps,
 hardcoded RecordType IDs); this finds CIs that are hard to read or modify safely, even if they're
-currently correct. It reuses two of `ci_audit.py`'s duplication checks as one of its four scoring
-signals, but doesn't touch or duplicate any of audit's correctness-trap checks.
+currently correct. It reuses `ci_audit.py`'s duplication and mixed-type-CASE checks directly for two of its four
+scoring signals, but doesn't reimplement or modify any of audit's correctness-trap logic.
 
 ## Prerequisites
 
