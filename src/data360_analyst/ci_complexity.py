@@ -23,6 +23,59 @@ from data360_analyst import ci_audit
 DIALECT = ci_audit.DIALECT
 
 
+def aggregate_ci_metrics(trees, raw_sql):
+    """Combine per-statement structural metrics across every statement in one
+    CI's SQL file into a single per-CI dict. `duplication_count` starts at 0 —
+    callers fill it in via `collect_duplication_counts` once the whole
+    snapshot's cross-CI filter index is available.
+    """
+    per_statement = [compute_structural_metrics(t) for t in trees if t is not None]
+
+    def _max(key):
+        return max((m[key] for m in per_statement), default=0)
+
+    def _sum(key):
+        return sum(m[key] for m in per_statement)
+
+    distinct_fields = set()
+    for tree in trees:
+        if tree is not None:
+            distinct_fields |= {c.sql(dialect=DIALECT) for c in tree.find_all(exp.Column)}
+
+    return {
+        "subquery_depth": _max("subquery_depth"),
+        "case_nesting_depth": _max("case_nesting_depth"),
+        "cte_chain_length": _max("cte_chain_length"),
+        "boolean_condition_depth": _max("boolean_condition_depth"),
+        "join_count": _sum("join_count"),
+        "when_branch_count": _sum("when_branch_count"),
+        "mixed_type_case_count": _sum("mixed_type_case_count"),
+        "distinct_field_count": len(distinct_fields),
+        "line_count": raw_sql.count("\n") + 1,
+        "duplication_count": 0,
+    }
+
+
+def collect_duplication_counts(parsed):
+    """`parsed` is `{filename: trees}` for every successfully-parsed CI in the
+    snapshot (same shape `ci_audit.build_ci_filter_index` expects). Returns
+    `{ci_name_lower: duplication_hit_count}`, combining within-CI repeated
+    derived expressions and cross-CI redundant filters.
+    """
+    ci_filter_index = ci_audit.build_ci_filter_index(parsed)
+    counts = {}
+    for fname, trees in parsed.items():
+        name = Path(fname).stem.lower()
+        total = 0
+        for tree in trees:
+            if tree is None:
+                continue
+            total += len(ci_audit.check_repeated_derived_expressions(tree))
+            total += len(ci_audit.check_cross_ci_redundant_filter(tree, ci_filter_index))
+        counts[name] = total
+    return counts
+
+
 def compute_structural_metrics(tree):
     """Per-statement structural signals. No cross-statement or cross-CI
     aggregation — callers combine these across a CI's statements.

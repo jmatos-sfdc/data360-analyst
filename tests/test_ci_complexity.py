@@ -82,3 +82,68 @@ def test_distinct_field_count_counts_unique_columns():
     sql = "SELECT a, b, a FROM t WHERE a = 1"
     m = ci_complexity.compute_structural_metrics(_tree(sql))
     assert m["distinct_field_count"] == 2
+
+
+def test_aggregate_ci_metrics_takes_max_depth_across_statements():
+    sql = "SELECT * FROM (SELECT * FROM (SELECT 1) a) b; SELECT * FROM (SELECT 1) c"
+    trees = sqlglot.parse(sql, read=DIALECT)
+    m = ci_complexity.aggregate_ci_metrics(trees, sql)
+    assert m["subquery_depth"] == 2
+
+
+def test_aggregate_ci_metrics_sums_join_count_across_statements():
+    sql = "SELECT * FROM a JOIN b ON a.id=b.id; SELECT * FROM c JOIN d ON c.id=d.id"
+    trees = sqlglot.parse(sql, read=DIALECT)
+    m = ci_complexity.aggregate_ci_metrics(trees, sql)
+    assert m["join_count"] == 2
+
+
+def test_aggregate_ci_metrics_unions_distinct_fields_across_statements():
+    trees = sqlglot.parse("SELECT a FROM t; SELECT b FROM t", read=DIALECT)
+    m = ci_complexity.aggregate_ci_metrics(trees, "SELECT a FROM t; SELECT b FROM t")
+    assert m["distinct_field_count"] == 2
+
+
+def test_aggregate_ci_metrics_line_count_from_raw_sql():
+    raw = "SELECT a\nFROM t\nWHERE a = 1"
+    trees = sqlglot.parse(raw, read=DIALECT)
+    m = ci_complexity.aggregate_ci_metrics(trees, raw)
+    assert m["line_count"] == 3
+
+
+def test_aggregate_ci_metrics_duplication_count_defaults_zero():
+    trees = sqlglot.parse("SELECT a FROM t", read=DIALECT)
+    m = ci_complexity.aggregate_ci_metrics(trees, "SELECT a FROM t")
+    assert m["duplication_count"] == 0
+
+
+def test_collect_duplication_counts_within_ci():
+    # Same non-trivial IFNULL expression repeated 3x — check_repeated_derived_expressions
+    # threshold is 3.
+    sql = (
+        "SELECT IFNULL(a.phone_number__c, 'unknown'), "
+        "IFNULL(a.phone_number__c, 'unknown'), "
+        "IFNULL(a.phone_number__c, 'unknown') FROM a"
+    )
+    parsed = {"Some_CI__cio.sql": sqlglot.parse(sql, read=DIALECT)}
+    counts = ci_complexity.collect_duplication_counts(parsed)
+    assert counts["some_ci__cio"] >= 1
+
+
+def test_collect_duplication_counts_cross_ci():
+    # Upstream CI filters on a.status__c = 'Active' in its WHERE clause.
+    # Downstream CI inner-joins it AND duplicates the same filter on the base table 'a'
+    # via JOIN ON predicate — this is a redundant filter since the upstream CI
+    # already enforces it.
+    upstream_sql = "SELECT id FROM a WHERE a.status__c = 'Active'"
+    downstream_sql = (
+        "SELECT b.id FROM b "
+        "INNER JOIN Upstream_CI__cio ON b.upstream_id = Upstream_CI__cio.id "
+        "INNER JOIN a ON a.id = b.a_id AND a.status__c = 'Active'"
+    )
+    parsed = {
+        "Upstream_CI__cio.sql": sqlglot.parse(upstream_sql, read=DIALECT),
+        "Downstream_CI__cio.sql": sqlglot.parse(downstream_sql, read=DIALECT),
+    }
+    counts = ci_complexity.collect_duplication_counts(parsed)
+    assert counts["downstream_ci__cio"] >= 1
