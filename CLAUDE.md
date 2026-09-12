@@ -80,6 +80,7 @@ Use skills by name:
 | `/data360-analyst` | Full org analysis — orchestrates intake, audit, exploration, and documentation |
 | `/data360-intake` | Snapshot a Data Cloud org to disk (YAML sidecars + raw SQL) |
 | `/data360-ci-audit` | Audit CI SQL for known correctness traps |
+| `/data360-ci-refactor` | Score CI SQL maintainability, rank worst-first, suggest refactors |
 | `/data360-ci-find` | Map a business concept to the DMOs, fields, and example CIs that answer it |
 | `/data360-ci-author` | Write CI SQL — editor constraints, supported functions, RecordAlert patterns |
 | `/data360-sql-convert` | Convert Query Editor SQL to CI editor-compatible SQL |
