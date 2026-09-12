@@ -293,3 +293,69 @@ def test_build_report_includes_suggestions_for_flagged_ci():
     suggestions = {"bad__cio": ["Nested CASE expressions are hard to read..."]}
     report = ci_complexity.build_report(metrics, scores, suggestions, {}, low_n_warning=False)
     assert "Nested CASE expressions" in report
+
+
+from pathlib import Path
+from data360_analyst import ci_audit
+
+DEMO_ORG_QUERIES = Path(__file__).parent.parent / "examples" / "demo-org" / "queries"
+
+
+def _run_pipeline(query_dir):
+    parsed, raw_sql, excluded = {}, {}, {}
+    for sql_path in sorted(query_dir.glob("*.sql")):
+        trees, raw, err = ci_audit.parse_file(sql_path)
+        if err is not None:
+            excluded[sql_path.stem.lower()] = err
+        else:
+            parsed[sql_path.name] = trees
+            raw_sql[sql_path.name] = raw
+
+    duplication_counts = ci_complexity.collect_duplication_counts(parsed)
+    all_metrics = {}
+    for fname, trees in parsed.items():
+        name = Path(fname).stem.lower()
+        m = ci_complexity.aggregate_ci_metrics(trees, raw_sql[fname])
+        m["duplication_count"] = duplication_counts.get(name, 0)
+        all_metrics[name] = m
+
+    scores = ci_complexity.normalize_and_score(all_metrics)
+    trees_by_name = {Path(f).stem.lower(): t for f, t in parsed.items()}
+    suggestions = {n: ci_complexity.suggest_refactor(n, trees_by_name[n], scores[n]) for n in scores}
+    report = ci_complexity.build_report(
+        all_metrics, scores, suggestions, excluded, low_n_warning=len(parsed) < 3
+    )
+    return all_metrics, scores, suggestions, excluded, report
+
+
+def test_full_pipeline_on_demo_org_scores_every_ci():
+    all_metrics, scores, _, excluded, report = _run_pipeline(DEMO_ORG_QUERIES)
+    assert not excluded
+    assert len(scores) == len(list(DEMO_ORG_QUERIES.glob("*.sql")))
+    for result in scores.values():
+        assert result["bucket"] in ("Low", "Medium", "High", "Severe")
+    assert "# CI Complexity" in report
+    assert "too few" not in report.lower()  # 8 CIs in demo-org, well above the low-N floor
+
+
+def test_full_pipeline_tolerates_unparseable_file(tmp_path):
+    good_dir = tmp_path / "queries"
+    good_dir.mkdir()
+    for sql_path in list(DEMO_ORG_QUERIES.glob("*.sql"))[:3]:
+        (good_dir / sql_path.name).write_text(sql_path.read_text())
+    (good_dir / "Broken__cio.sql").write_text("SELEC this is not valid sql (((")
+
+    _, scores, _, excluded, report = _run_pipeline(good_dir)
+    assert "broken__cio" in excluded
+    assert "broken__cio" not in scores
+    assert "parse error" in report.lower()
+
+
+def test_full_pipeline_warns_on_low_n(tmp_path):
+    small_dir = tmp_path / "queries"
+    small_dir.mkdir()
+    for sql_path in list(DEMO_ORG_QUERIES.glob("*.sql"))[:2]:
+        (small_dir / sql_path.name).write_text(sql_path.read_text())
+
+    _, _, _, _, report = _run_pipeline(small_dir)
+    assert "too few" in report.lower()
