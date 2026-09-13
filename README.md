@@ -279,6 +279,7 @@ The toolkit ships with Claude Code Skills that let you invoke specific workflows
 | `/data360-analyst` | Full org analysis — orchestrates intake, audit, exploration, and documentation |
 | `/data360-intake` | Snapshot a Data 360 org to disk (YAML sidecars + raw SQL) |
 | `/data360-ci-audit` | Audit CI SQL for known correctness traps |
+| `/data360-ci-refactor` | Score CI SQL maintainability, rank worst-first, suggest refactors |
 | `/data360-ci-find` | Map a business concept to the DMOs, fields, and example CIs that answer it — for the current client |
 | `/data360-ci-author` | Write CI SQL with editor constraints and supported function patterns |
 | `/data360-sql-convert` | Convert Query Editor SQL to CI editor-compatible SQL |
@@ -308,6 +309,7 @@ You don't need to run these scripts directly — Claude does it for you.
 
 - **`intake.py`** — Exports every DMO, DLO, DLO→DMO mapping, CI, transform, segment, stream, and activation as YAML sidecars + raw SQL/JSON definitions. Diff-friendly, version-controllable, grep-able. Fingerprints each endpoint's field set into the manifest and **warns on API drift** — if a field the org returned last run vanishes this run, intake flags it (and marks `index.yaml`) instead of silently emitting incomplete sidecars.
 - **`ci_audit.py`** — Parses each CI's SQL with `sqlglot` and checks for correctness traps (leap-year bugs, single-day triggers, hardcoded RecordType IDs, missing unsubscribe suppression, dedup window grain), CI editor compliance (~20 save-time rejection patterns: unsupported functions, identifier hygiene, structural violations, expression-level traps), and redundancy patterns (duplicate JOIN/WHERE predicates, repeated derived expressions, filters duplicated across an inner-joined CI, doc-recommended limits exceeded).
+- **`ci_complexity.py`** — Scores every CI's SQL for maintainability (structural depth, branch complexity, duplication, size), percentile-normalized against the other CIs in the same snapshot — never a fixed threshold. Ranks worst-first, buckets Low/Medium/High/Severe, and for High/Severe CIs suggests refactors (prose + CI-editor-safe rewritten SQL where a mechanical rewrite exists). Reuses `ci_audit.py`'s duplication and mixed-type-CASE checks rather than reimplementing them; kept separate since it's a maintainability signal, not a correctness check.
 - **`ci_convert.py`** — Mechanically rewrites Query Editor SQL into CI editor-compatible form. Auto-fixes the deterministic subset (identifier hygiene, top-level `ORDER BY` removal, `IN (SELECT col)` aliasing, function swaps like `COALESCE`/`COUNT(DISTINCT)`/`||`, `AVG(CASE ...)` → `SUM/COUNT`, `CASE … ELSE NULL` → typed zero). Flags self-joins, CTEs, EXISTS, DLO refs, and other judgment-required cases. Re-runs `ci_audit.py` on the output and reports anything still firing.
 - **`dmo_graph.py`** — Ranks DMOs by fan-in (how many CIs and segments read from them) to identify backbone vs. leaf objects.
 - **`lineage_graph.py`** — Builds a full Stream/DLO/DMO/CI/Segment/Activation graph from the YAML sidecars + raw CI SQL. Powers the `get_upstream` / `get_downstream` / `find_orphans` / `shortest_path` / `lineage_summary` MCP tools.
@@ -338,12 +340,13 @@ data360 analyze --snapshot examples/demo-org
 # Export the whole org to disk, then audit every CI's SQL
 data360 intake --org <alias> --output-dir ~/data360/<client>
 data360 ci-audit --output-dir ~/data360/<client>
+data360 ci-complexity --output-dir ~/data360/<client>
 
 # Generate the HTML dashboard
 data360 dashboard --data-dir ~/data360/<client> --client "<client>"
 ```
 
-All 19 subcommands — including `ci-convert`, `dmo-graph`, `lineage-graph`, `diagram-crosscheck`, `ci-visualize`, the `provenance-*` family, and `export-sql-csv` — plus which ones need a live org and the full command cookbook, live in **[docs/reference.md](docs/reference.md#using-the-cli-directly)**. Every subcommand is also reachable as `python -m data360_analyst.<module>`.
+All 20 subcommands — including `ci-complexity`, `ci-convert`, `dmo-graph`, `lineage-graph`, `diagram-crosscheck`, `ci-visualize`, the `provenance-*` family, and `export-sql-csv` — plus which ones need a live org and the full command cookbook, live in **[docs/reference.md](docs/reference.md#using-the-cli-directly)**. Every subcommand is also reachable as `python -m data360_analyst.<module>`.
 
 ## How it works
 
@@ -351,7 +354,7 @@ The request path is diagrammed under [Quick start](#quick-start). What each hop 
 
 **Auth:** The toolkit never stores credentials. It shells out to the sf CLI to get a fresh access token (`sf org auth show-access-token` on sf CLI versions released after May 27, 2026; `sf org display` on older versions — `sf_auth.py` handles both), reusing the OAuth session you already established with `sf org login web`. Your Salesforce permissions are the only permissions the toolkit has.
 
-**MCP server:** `mcp_server.py` exposes the org's Data 360 REST endpoints as MCP tools — `list_dmos`, `get_ci_metadata`, `list_segments`, `run_sql`, etc. Read-only by design: no create/update/delete tools, and the Data 360 SQL engine itself rejects anything other than `SELECT`.
+**MCP server:** `mcp_server.py` exposes the org's Data 360 REST endpoints as MCP tools — `list_dmos`, `get_ci_metadata`, `list_segments`, `run_sql`, etc. Read-only by design: no create/update/delete tools, and the Data 360 SQL engine itself rejects anything other than `SELECT`. `run_sql` + `get_sql_rows` page results via `offset`; `status.rowCount` is an estimate for aggregate queries, so callers page until `data` comes back empty rather than trusting the count.
 
 **Scripts:** The REST APIs return raw artifacts (CI SQL is HTML-entity-encoded; transform DAGs are deeply nested JSON). The Python scripts decode, parse, and produce YAML sidecars, markdown reports, raw `.sql` files, and the HTML dashboard.
 

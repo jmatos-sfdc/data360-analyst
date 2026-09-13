@@ -39,6 +39,7 @@ Every subcommand and the job it does:
 | `analyze` | Snapshot an org and print the answers — backbone DMOs, orphans, suspect CIs, flow-to-activation — to the terminal | yes (or `--snapshot`) |
 | `intake` | Snapshot a live org to disk (YAML sidecars + raw SQL) | yes |
 | `ci-audit` | Audit every CI's SQL — correctness traps, editor compliance, redundancy | no |
+| `ci-complexity` | Score every CI's SQL for maintainability, rank worst-first, suggest refactors | no |
 | `ci-convert` | Rewrite Query Editor SQL into CI editor-compatible form | no |
 | `ci-concordance` | Build a concept → DMO / field / example-CI index | no |
 | `ci-visualize` | Render one CI's SQL as an annotated, clickable onboarding report | no |
@@ -78,6 +79,9 @@ data360 ci-audit --output-dir ~/data360/<client>
 # Audit + auto-fix in one shot (writes queries-converted/ + reports/ci-convert.md)
 data360 ci-audit --output-dir ~/data360/<client> --fix
 
+# Score every CI's SQL for maintainability, ranked worst-first (writes reports/ci-complexity-report.md)
+data360 ci-complexity --output-dir ~/data360/<client>
+
 # Convert Query Editor SQL to CI editor-compatible form (single file)
 data360 ci-convert --input query.sql --diff
 
@@ -109,6 +113,35 @@ data360 provenance-render --config <config.json> \
 data360 export-sql-csv --org <alias> --sql query.sql --out result.csv
 ```
 
+**Example: `ci-complexity` output.** Ranked worst-first, scores are relative to the other CIs in the same snapshot (run against the bundled `examples/demo-org`):
+
+```markdown
+# CI Complexity / Refactor
+
+_Scores rank each CI against the other CIs in this snapshot only — a bucket reflects relative
+standing within this org, not a universal quality bar._
+
+## Ranked (worst first)
+
+| CI | Score | Bucket | Top driver |
+|---|---|---|---|
+| customer_order_totals__cio | 91 | Severe | depth |
+| order_conversion_rate__cio | 81 | Severe | depth |
+| customer_order_summary_queryeditor__cio | 79 | Severe | depth |
+| active_customer_accounts__cio | 73 | High | depth |
+| customer_profile_score__cio | 71 | High | duplication |
+
+## Detail
+
+### customer_profile_score__cio — 71 (High)
+
+This IFNULL/COALESCE/NVL expression — `COALESCE(ssot__Individual__dlm.FirstName__c, 'Customer')` —
+is repeated 4+ times across this CI's SELECT/JOIN/GROUP BY/WHERE clauses. Promote it into a column
+on the input CI (preferred), or compute it once in a derived subquery —
+`FROM (SELECT COALESCE(ssot__Individual__dlm.FirstName__c, 'Customer') AS derived_value, ... ) AS src`
+— never a top-level Common Table Expression, which the CI editor rejects.
+```
+
 Every subcommand is also reachable as `python -m data360_analyst.<module>` if you're not using the installed console script.
 
 ## Output structure
@@ -133,6 +166,7 @@ Every subcommand is also reachable as `python -m data360_analyst.<module>` if yo
 └── reports/                       Audit findings + dashboard
     ├── dmo-graph.md
     ├── ci-audit.md
+    ├── ci-complexity-report.md
     ├── ci-convert.md
     ├── diagram-crosscheck.md
     ├── dashboard.html             Single-page tabbed dashboard with SVG charts
