@@ -597,14 +597,20 @@ def list_ir_rulesets() -> dict:
 
 @mcp.tool
 def run_sql(query: str) -> dict:
-    """Submit a Data Cloud SQL query (async). Returns the job handle; fetch rows with `get_sql_rows`."""
+    """Submit a Data Cloud SQL query (async). First chunk of rows comes back in `data`;
+    the query id for further pages is `status.queryId` (not a top-level field) — pass
+    that to `get_sql_rows` as `job_id`. `status.rowCount` is an ESTIMATE for GROUP BY /
+    aggregate queries — do not use it as a stop condition when paging."""
     return _post("/ssot/query-sql", {"sql": query})
 
 
 @mcp.tool
-def get_sql_rows(job_id: str) -> dict:
-    """Fetch rows for a previously submitted SQL query job."""
-    return _get(f"/ssot/query-sql/{urllib.parse.quote(job_id)}/rows")
+def get_sql_rows(job_id: str, offset: int = 0) -> dict:
+    """Fetch one page of rows for a previously submitted SQL query job (`status.queryId`
+    from `run_sql`), starting at `offset`. Keep calling with increasing offset (e.g.
+    += len(data) each time) until `data` is empty or the response is `{"_error": 400, ...}`
+    — both mean end-of-data, not a failure."""
+    return _get(f"/ssot/query-sql/{urllib.parse.quote(job_id)}/rows", {"offset": offset})
 
 
 # ── Lineage tools ────────────────────────────────────────────────────────────
