@@ -1103,6 +1103,8 @@ header h1{font-size:15px;margin:0;font-family:var(--mono);font-weight:600;}heade
 .main{flex:1;min-width:0;display:flex;flex-direction:column;}
 .main .bar{padding:9px 16px;border-bottom:1px solid var(--line);background:var(--panel2);font-size:12px;color:var(--muted);}
 pre.sql{margin:0;padding:16px 18px;flex:1;overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#cdd8ea;white-space:pre;}
+pre.sql i{font-style:normal;}pre.sql i.c{font-style:italic;}
+pre.sql .k{color:#c792ea;}pre.sql .fn{color:#82aaff;}pre.sql .s{color:#c3e88d;}pre.sql .n{color:#f78c6c;}pre.sql .c{color:#637777;}
 .span{border-radius:3px;cursor:pointer;border-bottom:1px dotted #4da3ff66;}.span:hover{background:#4da3ff22;border-bottom-color:var(--accent);}
 .span.innerfield{border-bottom-color:#8a97b077;}.span.innerfield:hover{border-bottom-color:var(--muted);}
 .navitem.innerfield{color:#9fb4d6;}
@@ -1138,6 +1140,7 @@ aside .ahead{padding:10px 13px;border-bottom:1px solid var(--line);background:va
 .themetoggle:hover{border-color:var(--accent);color:var(--ink);}
 [data-theme="light"]{--bg:#f4f6fb;--panel:#fff;--panel2:#edf0f7;--ink:#1a2035;--muted:#6b7a99;--line:#d4daea;--accent:#1a6fd4;--warn:#b87200;--bad:#cc2222;}
 [data-theme="light"] pre.sql{color:#1a2035;}
+[data-theme="light"] pre.sql .k{color:#7c3aed;}[data-theme="light"] pre.sql .fn{color:#1a6fd4;}[data-theme="light"] pre.sql .s{color:#2e7d32;}[data-theme="light"] pre.sql .n{color:#c05621;}[data-theme="light"] pre.sql .c{color:#6b7a99;}
 [data-theme="light"] .span.hot{background:#fff3d4;}
 [data-theme="light"] .span.hot.finding{background:#ffe0e0;}
 [data-theme="light"] .meaning{background:#e8f5ef;border-color:#a8d5b8;}
@@ -1177,18 +1180,43 @@ function toggleTheme(){const n=document.documentElement.dataset.theme==='light'?
 const MODEL = __MODEL_JSON__;
 const SQL = MODEL.sql, ELS = MODEL.elements;
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-// nested-span render: boundary sweep, open longer spans first so parents wrap children
+// SQL syntax coloring — closed keyword set; identifier followed by '(' reads as a function.
+const SQL_KW=new Set(["SELECT","FROM","WHERE","AND","OR","AS","ON","JOIN","INNER","LEFT","RIGHT","FULL","OUTER","CROSS","GROUP","ORDER","BY","HAVING","CASE","WHEN","THEN","ELSE","END","NULL","IS","NOT","IN","LIKE","DISTINCT","UNION","ALL","WITH","LIMIT","OFFSET","ASC","DESC","BETWEEN","EXISTS","OVER","PARTITION","QUALIFY","USING","INTERVAL","CAST","TRUE","FALSE"]);
+// tokenize a raw run into escaped, class-wrapped tokens (comments/strings/numbers/keywords/functions)
+function highlight(text){
+  let out="";const re=/(--[^\n]*|\/\*[\s\S]*?\*\/)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|([\s\S])/g;
+  let m;
+  while((m=re.exec(text))){
+    if(m[1])out+='<i class="c">'+esc(m[1])+'</i>';
+    else if(m[2])out+='<i class="s">'+esc(m[2])+'</i>';
+    else if(m[3])out+='<i class="n">'+esc(m[3])+'</i>';
+    else if(m[4]){
+      const w=m[4];
+      if(SQL_KW.has(w.toUpperCase()))out+='<i class="k">'+esc(w)+'</i>';
+      else if(/^\s*\(/.test(text.slice(re.lastIndex)))out+='<i class="fn">'+esc(w)+'</i>';
+      else out+=esc(w);
+    }
+    else out+=esc(m[5]);
+  }
+  return out;
+}
+// nested-span render: boundary sweep, open longer spans first so parents wrap children.
+// Plain-text runs between span boundaries pass through highlight(); syntax spans never
+// cross an annotation boundary, so click/nesting stays valid.
 function buildSql(){
   const marks = ELS.filter(e=>e.span).map(e=>({id:e.id,s:e.span[0],e2:e.span[1],kind:e.kind}));
   const opens={},closes={};
   marks.forEach(m=>{(opens[m.s]=opens[m.s]||[]).push(m);(closes[m.e2]=closes[m.e2]||[]).push(m);});
-  let h="";
+  let h="",buf="";
+  const flush=()=>{if(buf){h+=highlight(buf);buf="";}};
   for(let i=0;i<=SQL.length;i++){
+    if((closes[i]&&closes[i].length)||(opens[i]&&opens[i].length))flush();
     (closes[i]||[]).forEach(()=>h+="</span>");
     (opens[i]||[]).sort((a,b)=>(b.e2-b.s)-(a.e2-a.s)).forEach(m=>{
       h+='<span class="span '+m.kind+'" data-id="'+m.id+'" onclick="pick(event,\''+m.id+'\')">';});
-    if(i<SQL.length) h+=esc(SQL[i]);
+    if(i<SQL.length) buf+=SQL[i];
   }
+  flush();
   document.getElementById("sqlpane").innerHTML=h;
 }
 function byId(id){return ELS.find(e=>e.id===id);}
