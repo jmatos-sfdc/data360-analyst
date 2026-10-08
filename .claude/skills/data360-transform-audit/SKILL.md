@@ -72,6 +72,10 @@ Flag them for awareness but don't audit their internals.
 - Are `LOOKUP` joins used where `INNER` should be (or vice versa)?
 - Are `rightQualifier` values consistent?
 
+## Fix at the source, not downstream
+
+When a source-data defect shows up, document it, raise it to the data owner, and mirror the source. Do not patch it with derived keys, CI cleanup filters, or transform dedupes. When a fix does belong in the platform, put it as far upstream as possible: one FILTER node on a shared transform repaired ~29 downstream CIs at once in a field case.
+
 ## Output
 
 Write findings to `~/Projects/clients/<Client>/Data360/reports/transform-audit.md`. Group by severity: critical (dedup grain wrong), medium (null handling inconsistency), low (naming/style).

@@ -84,6 +84,21 @@ Writes `reports/diagram-crosscheck.md`. Key output:
 - **Orphan DMOs** — mapped and ingesting data but no CI or segment consumes them
 - **DPE-managed transforms** — `DPE_*` prefixed transforms are Auto Cloud package-managed, excluded from audits by default
 
+## DMO and platform gotchas
+
+- **Field suffixes vary** (`__c` vs `_c__c`); master-detail FKs get mangled on ingest (e.g. `Record_Alert_c__c`). Verify with `get_dmo`; `isMapped: false` fields are not queryable.
+- A DLO field with no DMO mapping is never queryable; a new CRM field is unusable until the DLO-to-DMO mapping is updated.
+- Large DMOs can stall ad-hoc queries at progress 0 — query an existing CI that already materializes the slice.
+- FLS on a parent object (e.g. Product2) does not cascade to junction objects; the connector permission set needs an independent grant.
+- Polymorphic lookups (`WhatId`) need `TYPEOF`; CSV result format drops TYPEOF subfields, so use JSON.
+- `IFNULL(parent, child)` hides the grain you filter on.
+- A cycle/period flag (e.g. `IsForecastPeriod`) is a type flag, not a past/future flag. Filtering `<> 'X'` on a multi-cycle table inflates counts by the cycle multiple; filter on the current-cycle flag.
+
+## Rules of thumb
+
+- **DPE** for bulk volumes (thousands to millions). **Activation-triggered Flow** for insight-driven actions up to roughly the low 100k.
+- Same-region S3 and Data Cloud traffic is still public; private-link is the only private path.
+
 ## Output
 
 All reports go to `~/Projects/clients/<Client>/Data360/reports/`. One markdown file per analysis run.

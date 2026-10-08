@@ -239,6 +239,21 @@ SELECT CONCAT('Count~', UpstreamCI__cio.count_str__c) AS label__c, ...
 
 ---
 
+## Date syntax: CI editor vs Query Editor
+
+| | CI editor (Spark-leaning) | Query Editor (Hyper/ANSI) |
+|---|---|---|
+| Current date | `CURRENT_DATE()` (parens) | `CURRENT_DATE` (no parens) |
+| Add days | `DATE_ADD(d, n)` (2-arg) | `DATE_ADD(unit, count, date)` |
+| `INTERVAL` | not allowed | allowed |
+| `DATE_SUB` | supported in CI | rejected by the `run_sql` MCP tool |
+
+**Reverse direction (CI SQL to Query Editor, for testing):** drop `FIRST()` wrappers, strip constants from `GROUP BY`, drop the date window if it empties the result, change `IFNULL` to `COALESCE`, and rewrite date arithmetic per the table.
+
+**Datetime join keys:** joining DATE_TIME to DATE validates but returns 0 rows in the CI editor. Wrap both sides in `DATE_TRUNC('DAY', ...)`.
+
+---
+
 ## Workflow
 
 The fastest path is `ci_convert.py` — it applies the mechanical subset of the rules above automatically and flags everything that needs human judgment. Use it first, then hand-finish what it flagged.
@@ -309,6 +324,8 @@ After conversion, scan output for:
 - [ ] Currency aggregates wrapped in `TRY_CONVERT_CURRENCY(amount, 'SRC', 'TGT')` — 3-arg form
 
 **Expressions**
+- [ ] No simple `CASE <operand> WHEN` (use searched CASE), no `NOT (a AND b)`, no `FIRST(CASE ...)`, no subquery in SELECT
+- [ ] No non-ASCII characters; no SQL comments; CI name <= 36 chars (excl. `__cio`)
 - [ ] No `DATEDIFF` inside `CASE` (pre-computed in subquery)
 - [ ] No `AVG(CASE ...)` (rewritten as `SUM/COUNT`)
 - [ ] No `CASE` branches mixing `NULL` with numeric/string types

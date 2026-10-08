@@ -36,6 +36,9 @@ Checks (AST-based unless noted):
     - IN (SELECT col FROM ...) where the inner column has no explicit alias
     - SELECT alias equal to the column's source name (`Id__c AS Id__c`)
     - TRY_CONVERT_CURRENCY arity != 3 (must be (amount, src_iso, 'TGT_ISO'))
+    - Simple `CASE <operand> WHEN` (env-dependent DATATYPE_MISMATCH), `NOT (a AND b)`,
+      `FIRST(CASE ...)`, subquery in the SELECT list
+    - Non-ASCII characters in the SQL; CI API name over 36 chars (excl. `__cio`)
 
     Redundancy / cleanup:
     - Same equality filter in JOIN ON and WHERE (defensive duplication)
@@ -932,6 +935,73 @@ def check_hard_limits(tree):
     return findings
 
 
+# ── CI editor trap detection (Pass 3) ────────────────────────────────────────
+
+_CI_NAME_MAX = 36  # API name length cap, excluding the `__cio` suffix
+_RX_NON_ASCII = re.compile(r"[^\x00-\x7F]")
+
+
+def check_simple_case(tree):
+    """`CASE <operand> WHEN ...` — some environments reject it with
+    DATATYPE_MISMATCH. Searched CASE (`CASE WHEN <cond>`) is the safe form.
+    """
+    hits = []
+    for case in tree.find_all(exp.Case):
+        if case.args.get("this") is not None:
+            hits.append(case.sql(dialect=DIALECT)[:140] + "…")
+    return hits
+
+
+def check_not_compound(tree):
+    """`NOT (a AND b)` / `NOT (a OR b)` — rejected; rewrite with De Morgan."""
+    hits = []
+    for n in tree.find_all(exp.Not):
+        inner = _unwrap(n.this)
+        if isinstance(inner, (exp.And, exp.Or)):
+            hits.append(n.sql(dialect=DIALECT)[:140])
+    return hits
+
+
+def check_first_case(tree):
+    """`FIRST(CASE ...)` — rejected; only SUM/COUNT may wrap a CASE.
+    Compute the CASE in an inner subquery, then FIRST() the resulting column.
+    """
+    hits = []
+    for first in tree.find_all(exp.First):
+        if isinstance(_unwrap(first.args.get("this")), exp.Case):
+            hits.append(first.sql(dialect=DIALECT)[:140] + "…")
+    return hits
+
+
+def check_select_subquery(tree):
+    """Scalar subquery in a SELECT list — rejected. Use a 1-row FROM join."""
+    hits = []
+    for select in tree.find_all(exp.Select):
+        for proj in select.expressions or []:
+            for node in proj.walk():
+                n = node[0] if isinstance(node, tuple) else node
+                if isinstance(n, exp.Subquery) and not isinstance(n.parent, (exp.In, exp.Exists)):
+                    hits.append(n.sql(dialect=DIALECT)[:120] + "…")
+    return list(dict.fromkeys(hits))
+
+
+def check_non_ascii(sql_text):
+    """Non-ASCII characters (smart quotes, em-dashes, NBSP) — rejected by the
+    validator, usually pasted in from docs or chat. Returns "line N: char" hits.
+    """
+    hits = []
+    for i, line in enumerate(sql_text.splitlines(), 1):
+        for m in _RX_NON_ASCII.finditer(line):
+            hits.append(f"line {i}: U+{ord(m.group()):04X}")
+    return hits[:20]
+
+
+def check_ci_name_length(ci_name):
+    """CI API name must be <= 36 chars excluding `__cio`."""
+    base = ci_name[:-5] if ci_name.endswith("__cio") else ci_name
+    return [(base, len(base))] if len(base) > _CI_NAME_MAX else []
+
+
 # ── Driver ───────────────────────────────────────────────────────────────────
 
 def parse_file(path):
@@ -1056,7 +1126,7 @@ def build_confirm_queries(tree):
     return queries
 
 
-def audit_file(trees, raw_sql, ci_filter_index=None):
+def audit_file(trees, raw_sql, ci_filter_index=None, ci_name=None):
     findings = {
         # Existing checks.
         "single_day_trigger": [],
@@ -1092,6 +1162,13 @@ def audit_file(trees, raw_sql, ci_filter_index=None):
         "cdp_in_aggregate": [],
         "concat_aggregate_provenance": [],
         "hard_limits": {},
+        # CI editor compliance — Pass 3.
+        "simple_case": [],
+        "not_compound": [],
+        "first_case": [],
+        "select_subquery": [],
+        "non_ascii": [],
+        "ci_name_length": [],
         # Runnable confirm queries for data-dependent findings (self-verifying).
         "confirm_queries": [],
     }
@@ -1130,6 +1207,11 @@ def audit_file(trees, raw_sql, ci_filter_index=None):
         findings["ntile_alias_reuse"] += check_ntile_alias_reuse(tree)
         findings["cdp_in_aggregate"] += check_cdp_in_aggregate(tree)
         findings["concat_aggregate_provenance"] += check_concat_aggregate_provenance(tree)
+        # CI editor compliance — Pass 3.
+        findings["simple_case"] += check_simple_case(tree)
+        findings["not_compound"] += check_not_compound(tree)
+        findings["first_case"] += check_first_case(tree)
+        findings["select_subquery"] += check_select_subquery(tree)
         # Take the largest hard-limit hit across statements.
         for k, v in check_hard_limits(tree).items():
             if v > findings["hard_limits"].get(k, 0):
@@ -1140,6 +1222,9 @@ def audit_file(trees, raw_sql, ci_filter_index=None):
     # Regex-based checks operate on raw SQL once per file, not per-tree.
     findings["concat_operator"] = check_concat_operator(raw_sql)
     findings["double_quoted_identifiers"] = check_double_quoted_identifiers(raw_sql)
+    findings["non_ascii"] = check_non_ascii(raw_sql)
+    if ci_name:
+        findings["ci_name_length"] = check_ci_name_length(ci_name)
     return findings
 
 
@@ -1193,7 +1278,8 @@ def format_report(results):
         "alias_equals_field_name", "concat_operator",
         "double_quoted_identifiers", "datediff_in_case", "avg_case_nesting",
         "case_mixed_types", "ntile_alias_reuse", "cdp_in_aggregate",
-        "concat_aggregate_provenance",
+        "concat_aggregate_provenance", "simple_case", "not_compound",
+        "first_case", "select_subquery", "non_ascii", "ci_name_length",
     )
     for f in results.values():
         if "parse_error" in f:
@@ -1247,6 +1333,12 @@ def format_report(results):
     lines.append(f"- Files reusing an aliased `NTILE` result in `CASE`: **{totals['ntile_alias_reuse']}**")
     lines.append(f"- Files with `CDP*` family inside an aggregation: **{totals['cdp_in_aggregate']}**")
     lines.append(f"- Files with CONCAT-aggregate provenance trap: **{totals['concat_aggregate_provenance']}**")
+    lines.append(f"- Files with simple `CASE <operand> WHEN` (env-dependent DATATYPE_MISMATCH): **{totals['simple_case']}**")
+    lines.append(f"- Files with `NOT (a AND/OR b)`: **{totals['not_compound']}**")
+    lines.append(f"- Files with `FIRST(CASE ...)`: **{totals['first_case']}**")
+    lines.append(f"- Files with a subquery in the SELECT list: **{totals['select_subquery']}**")
+    lines.append(f"- Files with non-ASCII characters: **{totals['non_ascii']}**")
+    lines.append(f"- CIs with API name over 36 chars (excluding `__cio`): **{totals['ci_name_length']}**")
     lines.append("")
     lines.append("### Redundancy / cleanup")
     lines.append(f"- Files with same predicate in JOIN ON and WHERE: **{totals['join_where_duplicate_filter']}**")
@@ -1475,6 +1567,48 @@ def format_report(results):
             for h in f["concat_aggregate_provenance"]:
                 lines.append(f"  - `{h}`")
 
+        if f.get("simple_case"):
+            any_finding = True
+            lines.append("- **Simple `CASE <operand> WHEN`** — some environments reject it with "
+                         "DATATYPE_MISMATCH (engine behavior varies per release). If you see it, "
+                         "use searched `CASE WHEN <cond> THEN ...`.")
+            for h in f["simple_case"]:
+                lines.append(f"  - `{h}`")
+
+        if f.get("not_compound"):
+            any_finding = True
+            lines.append("- **`NOT (compound)`** — rejected. Rewrite with De Morgan's law "
+                         "(`NOT (a AND b)` -> `a_neg OR b_neg`).")
+            for h in f["not_compound"]:
+                lines.append(f"  - `{h}`")
+
+        if f.get("first_case"):
+            any_finding = True
+            lines.append("- **`FIRST(CASE ...)`** — rejected; only SUM/COUNT may wrap a CASE. "
+                         "Compute the CASE in an inner subquery, then `FIRST()` the column.")
+            for h in f["first_case"]:
+                lines.append(f"  - `{h}`")
+
+        if f.get("select_subquery"):
+            any_finding = True
+            lines.append("- **Subquery in SELECT list** — rejected. Use a 1-row FROM join "
+                         "(note: output rows then depend on the lookup returning a row).")
+            for h in f["select_subquery"]:
+                lines.append(f"  - `{h}`")
+
+        if f.get("non_ascii"):
+            any_finding = True
+            lines.append("- **Non-ASCII character(s)** — rejected (smart quotes, em-dashes, NBSP "
+                         "pasted from docs/chat):")
+            for h in f["non_ascii"]:
+                lines.append(f"  - {h}")
+
+        if f.get("ci_name_length"):
+            any_finding = True
+            lines.append("- **CI API name too long** — cap is 36 chars excluding `__cio`:")
+            for base, n in f["ci_name_length"]:
+                lines.append(f"  - `{base}` ({n} chars)")
+
         if f.get("hard_limits"):
             any_finding = True
             lines.append("- **Doc-recommended limit exceeded** — refactoring candidate; "
@@ -1574,7 +1708,8 @@ def main():
     # Pass 3: audit each file with the index in hand.
     results = {name: {"parse_error": err} for name, err in parse_errors.items()}
     for name, trees in parsed.items():
-        results[name] = audit_file(trees, raw_sql[name], ci_filter_index=ci_filter_index)
+        results[name] = audit_file(trees, raw_sql[name], ci_filter_index=ci_filter_index,
+                                   ci_name=Path(name).stem)
 
     if not results:
         print(f"No .sql files under {q_dir}")

@@ -26,6 +26,8 @@ For full provenance and live test results, see [`local/ci-editor-sql-research.md
 - **50 measures per CI** (any field wrapped in an aggregate)
 - **10 dimensions per CI** (any non-aggregate column in `SELECT` — including literal constants like `0` or `'flag'`)
 - **~4-5 JOINs per CI** — soft ceiling; past that, validator errors become unreliable and runtime degrades
+- **CI API name: 36 chars max**, excluding the `__cio` suffix
+- **ASCII only** — smart quotes, em-dashes, and NBSP pasted from docs/chat are rejected (`grep -nP '[^\x00-\x7F]' file.sql`)
 - **Field aliases must be unique within the CI** AND must not collide with any existing DMO field name (including fields on joined DMOs you don't reference in `SELECT`)
 
 When you hit a limit, split the CI by grain or channel and chain CIs (CI-on-CI is the supported pattern).
@@ -61,7 +63,7 @@ When you hit a limit, split the CI by grain or channel and chain CIs (CI-on-CI i
 | `ORDER BY` | Forbidden at top level. Allowed inside `OVER(...)`. |
 | Window `OVER(...)` | Every column referenced (including in `ORDER BY`) must be aggregated when SELECT contains other aggregations. `PARTITION BY MAX(col)`, `ORDER BY MAX(col) DESC` — not bare columns. |
 | `CASE` | Branches must return the same type — no mixing `NULL` with numerics (use `0` or `0.0`). A `CASE` containing an aggregate becomes a (non-aggregatable) measure. |
-| Comments | `/* ... */` multiline supported. |
+| Comments | **Do not use SQL comments** (`--` or `/* */`) in CI SQL. Field-observed validator failures; keep rationale in the query file header outside the pasted SQL. |
 
 ---
 
@@ -211,6 +213,26 @@ Each of these is a syntactic shape that's valid Spark/Hyper SQL but rejected by 
 - **`CASE` branch types must match.** Replace `NULL` branches with `0` / `0.0` / `''` matching the other branches.
 
 - **`NTILE` results cannot be aliased and reused** — repeat the full `NTILE(n) OVER (...)` expression in each downstream `CASE` branch.
+
+- **DATE_TIME vs DATE join silently returns 0 rows.** It validates, then matches nothing. Wrap both sides in `DATE_TRUNC('DAY', ...)`. (Field case: 0 matches before the wrap, 23,279 after.)
+
+- **Datetime writeback targets need DATE_TIME columns.** A column feeding an `xsd:dateTime` target field must be DATE_TIME: `HOUR_ADD(date_expr, 0)`. `CAST(... AS TIMESTAMP)` is rejected. **A published CI column cannot change type or be renamed** — fixing it means: save the SQL, inactivate the DPE, delete the CI, recreate it, rebind the DPE, activate (see `data360-dpe-review`).
+
+- **Simple CASE (`CASE <operand> WHEN ...`)** can fail with DATATYPE_MISMATCH on some environments; engine behavior varies per release (tracked as an engine bug). If you see it, use searched `CASE WHEN <cond> THEN ...`.
+
+- **`NOT (a AND b)` / `NOT (a OR b)` rejected.** Rewrite with De Morgan's law.
+
+- **`FIRST(CASE ...)` rejected** — only `SUM`/`COUNT` may wrap a CASE. Compute the CASE in an inner subquery, then `FIRST()` the column.
+
+- **`MAX`/`MIN` reject text columns.** Use `FIRST(text_col)`.
+
+- **Subquery in the SELECT list rejected.** Use a 1-row FROM join. Tradeoff: output rows now survive only if the lookup returns a row.
+
+- **Per-execution constants in the outer SELECT** (e.g. `HOUR_ADD(CURRENT_DATE(), 0)`) must be repeated literally in `GROUP BY`.
+
+- **`CONCAT` takes text args only, no nested functions.** Cast or compute the pieces in an inner query first.
+
+- **Date to text inside an aggregate or CONCAT:** the only reliable form is a searched CASE emitting zero-padded MONTH/DAY/YEAR literals (extend the YEAR range well past today), e.g. `FIRST(CONCAT(<key>, '~', CASE WHEN MONTH(d)=1 THEN '01' ... END, ...))`. Keep one shared snippet per org.
 
 - **CONCAT-aggregate provenance trap.** The validator tracks aggregate provenance through expressions. `FIRST(CONCAT('Count~', CAST(COUNT(x) AS STRING)))` fails — provenance survives `CAST AS STRING` and `FIRST()` wrapping but does NOT survive crossing a CI boundary if upstream is published as `STRING`. Workaround: publish the aggregate as `CAST(... AS STRING) AS Foo__c` on an upstream CI, then `CONCAT` of `Foo__c` validates downstream.
 
@@ -408,6 +430,7 @@ WHERE ssot__Account__dlm.RecordTypeId__c = '<some 18-char id>'
 
 Safer:
 - Filter by a stable business field (`Type`, `Status`, a `__c` enum)
+- Join the RecordType DMO on `DeveloperName` + `SobjectType`. **Caveat:** this silently returns zero rows if the integration user lacks access to that RecordType — verify access before trusting an empty result.
 - If the Id is unavoidable, externalize to config/parameter and document the swap in the deployment runbook
 
 ---
@@ -422,11 +445,20 @@ Safer:
 
 ---
 
+## Validation quirks
+
+- **The Validate button is the only real gate.** Save and Publish add no checks.
+- **Error despite a valid-looking publish:** add a line break after `SELECT`.
+- **Long paste corruption** shows as garbled identifiers — paste in halves.
+- **Utility CIs** (e.g. a shared "current date stamp" CI joined on a literal key) cost one CI-on-CI nesting hop. Depth of 3-4 hops has worked; the limit is unverified.
+
+---
+
 ## Authoring workflow
 
 1. **Draft in Query Editor** — use CTEs, `MEDIAN`, `COALESCE`, aliases freely for rapid iteration.
 2. **Convert for CI** — run through `data360-sql-convert` (or apply the conversions table above by hand).
 3. **Validate in CI creation modal** — paste, click validate, fix errors before publishing.
 4. **Verify aggregatability** — confirm each measure's `Y`/`N` matches the segment/activation requirements downstream.
-5. **Verify the CIO** — after publish, query the `__cio` from Query Editor, check row counts and sample data.
+5. **Verify the CIO** — after publish, query the `__cio` from Query Editor, check row counts and sample data. **An empty CI false-passes validation queries** (NULL sums): require `total > 0 AND failures = 0`. Non-prod chains gated by date/flag filters often sit empty — seed test data to exercise them, and treat a zero in a downstream branch as missing source data before suspecting the SQL.
 6. **Write QA queries** — version-controlled validation SQL others can run independently.

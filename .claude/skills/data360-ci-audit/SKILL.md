@@ -42,7 +42,20 @@ data360 ci-audit --output-dir ~/Projects/clients/<client>/Data360 --fix
 | **`CURRENT_DATE()` usage** | Counts occurrences so user can review UTC vs US-timezone intent |
 | **Missing unsubscribe suppression** | Flags SQL with no `LEFT JOIN *_Unsubscribes__dlm` |
 | **`ROW_NUMBER() PARTITION BY` grain** | Reports every dedup window for manual verification |
-| **Hardcoded RecordType IDs** | String literals matching `012...` — fragile across sandbox refresh; prefer joining a RecordType DMO + filtering on `DeveloperName` |
+| **Hardcoded RecordType IDs** | String literals matching `012...` — fragile across sandbox refresh; prefer joining a RecordType DMO + filtering on `DeveloperName` (and confirm the integration user can access each RecordType, or the join silently returns zero rows) |
+
+### CI editor compliance (Pass 3)
+
+| Check | What it catches |
+|---|---|
+| **Simple `CASE <operand> WHEN`** | Env-dependent DATATYPE_MISMATCH; use searched CASE |
+| **`NOT (a AND/OR b)`** | Rejected; rewrite with De Morgan |
+| **`FIRST(CASE ...)`** | Rejected; only SUM/COUNT may wrap CASE |
+| **Subquery in SELECT list** | Rejected; use a 1-row FROM join |
+| **Non-ASCII characters** | Smart quotes/em-dashes/NBSP; reported as `line N: U+XXXX` |
+| **CI name > 36 chars** | Measured from the query filename stem, excluding `__cio` |
+
+Not automated (needs column types, which the SQL alone lacks): DATE_TIME-vs-DATE join mismatch. Review manually — see `data360-ci-author`. Also review manually: validation queries that pass on an **empty CI** (NULL sums). Pass criterion must be `total > 0 AND failures = 0`.
 
 ### Redundancy / cleanup
 

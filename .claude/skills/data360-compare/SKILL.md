@@ -75,6 +75,14 @@ Compare the same object type across two orgs to find schema differences.
    - CIs in UAT but not dev
    - Same CI name, different SQL (check `expression` field)
 
+### Per-environment hazards to diff
+
+- **Field existence drift:** fields or CI columns present in only some environments.
+- **Hardcoded IDs:** RecordType and similar IDs that are env-specific make anti-joins silent no-ops elsewhere.
+- **Stream field enablement and schedules:** per environment, not carried by Data Kits.
+- **Data richness:** validate volume and enrichment completeness in the data-richest environment. Thin or misaligned dev data misleads completeness checks (e.g. 28 matches in dev vs 12,624 in UAT).
+- **Empty chains:** non-prod chains gated by date/flag filters sit empty and false-pass; a zero is usually missing source data, not a bug.
+
 ### Output format
 
 ```markdown

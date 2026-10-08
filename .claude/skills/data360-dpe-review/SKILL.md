@@ -105,6 +105,39 @@ is available.
 2. Cascade to dependent CIs if applicable
 3. Run the DPE
 
+## Operating CIs and DPEs
+
+**Run semantics**
+- A manual CI run cascades **upstream only**. Republish is not a re-run. DLO ingestion is not covered.
+- The `run_ci` MCP tool reads rows; it does not trigger a run. Compare `latestProcessTime` vs `latestSuccessfulProcessTime` to tell whether a run happened.
+- `get_ci_metadata` `relationships[]` returns aliases only. Use `get_ci_sql` for the real joins.
+- Run order: feeding streams, then CIs, then the DPE.
+
+**Reading status**
+- "Canceled" DPE tasks mean the source CI produced 0 rows. Not a failure.
+- `ENTITY_IS_DELETED` / FK-not-found failures usually mean the DPE ran before its source CI refreshed.
+- Run-status SOQL: `BatchJobDefinition` is Tooling API. `BatchJob`, `BatchJobPart`, `BatchJobPartFailedRecord` are standard SOQL (part fields: `InputRowCount`, `OutputRowCount`, `FailedRowCount`). Nested semi-joins fail; use separate queries. Some orgs do not expose `BatchJob`.
+
+**Source CI changes**
+- **Published CI column type/name is immutable.** Recovery: save the SQL, inactivate the DPE, delete the CI, recreate it, rebind the DPE, activate. Columns feeding datetime targets must be DATE_TIME (`HOUR_ADD(expr, 0)`).
+- **Deleting a CI that feeds a DPE locks the DPE.** Recovery: recreate a CI with the old name, repoint the DPE, delete the scaffold.
+
+## Deployment considerations
+
+- **Column changes:** add a column Kit-first; remove a column DPE-first (otherwise column lockout).
+- **Data Kits do not package DPEs.** Deploy DPEs by change set or metadata API; absence from the kit is not a gap.
+- A new stream no-ops until its DLO is mapped to a DMO. Stream field enablement is per environment and is not carried by the kit.
+- Disabling a DLO field is one-way; recovery is delete and recreate.
+- **Prod deploys reset schedules** — add a post-deploy schedule-restore step.
+- Lower environments are often intentionally unscheduled to save credits. Check `latestSuccessfulProcessTime` before assuming a lower env is manual-only.
+
+## Access prerequisites
+
+DPE access is **permission set plus PSL, never profile**.
+- Edit: `ManageDataProcessingEngine` + `CustomizeApplication` + `ModifyAllData` + `AccessCustomerDataCloudSetup`.
+- Run on demand: `DPEOnDemandAccess` AND the `DataProcessingEnginePsl` license, with the license assigned **before** the permission set.
+- Custom permission-set clones may not carry any DPE permissions; verify rather than assume.
+
 ## Access fallback
 
 DPE definitions are not exposed by `/ssot/data-transforms`; that endpoint returns Data
