@@ -232,11 +232,13 @@ def test_suggest_refactor_duplication_driver_names_repeated_expression():
         "IFNULL(a.phone_number__c, 'unknown'), "
         "IFNULL(a.phone_number__c, 'unknown') FROM a"
     )
-    trees = sqlglot.parse(sql, read=DIALECT)
+    # parse_file's path: record the source spelling so IFNULL isn't shown as COALESCE.
+    trees = ci_audit._record_source_spelling(sqlglot.parse(sql, read=DIALECT), sql)
     result = {"score": 80, "bucket": "Severe", "breakdown": {}, "drivers": ["duplication"]}
     suggestions = ci_complexity.suggest_refactor("dup__cio", trees, result)
     assert suggestions
-    assert any("IFNULL" in s for s in suggestions)
+    assert any("IFNULL(a.phone_number__c" in s for s in suggestions)
+    assert not any("COALESCE" in s for s in suggestions)
 
 
 def test_suggest_refactor_duplication_driver_falls_back_when_no_local_hits():

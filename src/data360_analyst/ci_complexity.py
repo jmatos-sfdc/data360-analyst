@@ -246,18 +246,16 @@ def _suggest_depth_refactor(trees):
             "Nested CASE expressions are hard to read and modify safely. "
             "Flatten the inner CASE into the outer one's WHEN conditions "
             "(combine using AND), or promote the inner CASE into its own "
-            f"column on the input CI:\n```sql\n{deepest_case.sql(dialect=DIALECT)}\n```"
+            f"column on the input CI:\n```sql\n{deepest_case.sql(dialect=ci_audit.RENDER_DIALECT)}\n```"
         )
     return out
 
 
-# Label repeated-expression families by their most common source spelling —
-# sqlglot normalizes IFNULL/NVL/COALESCE all to the same Coalesce AST node
-# and always renders it back out as "COALESCE(...)" regardless of dialect,
-# so the original spelling in the CI's source SQL can't be recovered from
-# the parsed tree. Label by family instead of assuming one canonical name.
+# Label repeated-expression families by their leading function.
 _DUP_LABELS = (
-    ("COALESCE(", "IFNULL/COALESCE/NVL"),
+    ("IFNULL(", "IFNULL"),
+    ("NVL(", "NVL"),
+    ("COALESCE(", "COALESCE"),
     ("CONCAT(", "CONCAT"),
     ("CAST(", "CAST"),
     ("CASE", "CASE"),

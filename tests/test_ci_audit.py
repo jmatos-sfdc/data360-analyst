@@ -148,3 +148,21 @@ def test_pass3_findings_render_in_report():
     sql = "SELECT CASE a WHEN 1 THEN 'x' ELSE 'y' END AS b FROM t GROUP BY b"
     report = ci_audit.format_report({"X__cio.sql": _audit(sql)})
     assert "Simple `CASE <operand> WHEN`" in report
+
+
+def test_reports_keep_the_null_function_name_the_author_wrote(tmp_path):
+    # sqlglot parses IFNULL/NVL/COALESCE into one node and renders COALESCE;
+    # reports must quote the source spelling, since the CI editor rejects COALESCE.
+    from data360_analyst import ci_audit
+    from sqlglot import exp
+
+    sql_path = tmp_path / "X__cio.sql"
+    sql_path.write_text(
+        "SELECT 1 AS a__c FROM t;\n"
+        "SELECT ifnull(t.x__c, 0) AS b__c, NVL(t.y__c, 1) AS c__c, "
+        "COALESCE(t.z__c, 2) AS d__c FROM t"
+    )
+    trees, _, err = ci_audit.parse_file(sql_path)
+    assert err is None
+    rendered = [n.sql(dialect=ci_audit.RENDER_DIALECT) for n in trees[1].find_all(exp.Coalesce)]
+    assert rendered == ["IFNULL(t.x__c, 0)", "NVL(t.y__c, 1)", "COALESCE(t.z__c, 2)"]

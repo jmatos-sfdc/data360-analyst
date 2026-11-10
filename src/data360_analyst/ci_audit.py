@@ -56,6 +56,7 @@ from pathlib import Path
 
 try:
     import sqlglot
+    import sqlglot.dialects.spark
     from sqlglot import exp
 except ImportError:
     print("ERROR: sqlglot not installed. Use the bundled .venv or `pip install sqlglot`.")
@@ -63,6 +64,44 @@ except ImportError:
 
 
 DIALECT = "spark"  # Data Cloud SQL is ANSI + Spark-leaning (date_add, current_date, window)
+
+
+class _SourceSpelling(sqlglot.dialects.spark.Spark):
+    """Spark, except null-coalescing functions keep the name the CI author wrote.
+
+    sqlglot parses IFNULL, NVL and COALESCE into one Coalesce node and always
+    renders it as COALESCE, so a report quoting `IFNULL(x, 0)` from a CI would
+    show `COALESCE(x, 0)`, a function the CI editor rejects. `parse_file`
+    records the original name on each node; this dialect renders it back.
+    Used only for display in reports; DIALECT stays plain Spark for parsing.
+    """
+
+    class Generator(sqlglot.dialects.spark.Spark.Generator):
+        TRANSFORMS = {
+            **sqlglot.dialects.spark.Spark.Generator.TRANSFORMS,
+            exp.Coalesce: lambda self, e: self.func(
+                (e.meta or {}).get("src_name", "COALESCE"), e.this, *e.expressions
+            ),
+        }
+
+
+RENDER_DIALECT = _SourceSpelling
+
+
+def _record_source_spelling(trees, sql):
+    """Tag each Coalesce node with the function name as written in `sql`."""
+    for tree in trees:
+        if tree is None:
+            continue
+        for node in tree.find_all(exp.Coalesce):
+            m = node.meta or {}
+            start, end = m.get("start"), m.get("end")
+            if start is None or end is None:
+                continue
+            name = sql[start:end + 1].upper()
+            if name in ("IFNULL", "NVL", "COALESCE"):
+                node.meta["src_name"] = name
+    return trees
 
 
 # ── AST helpers ──────────────────────────────────────────────────────────────
@@ -109,7 +148,7 @@ def check_single_day_trigger(tree):
         left, right = _unwrap(eq.this), _unwrap(eq.expression)
         for col_side, date_side in ((left, right), (right, left)):
             if isinstance(col_side, exp.Column) and _is_date_add_of_today(date_side):
-                hits.append(eq.sql(dialect=DIALECT))
+                hits.append(eq.sql(dialect=RENDER_DIALECT))
                 break
     return hits
 
@@ -155,7 +194,7 @@ def check_leap_year(tree):
         has_month = any(_is_part_eq_today(t, "month") for t in terms)
         has_day = any(_is_part_eq_today(t, "day") for t in terms)
         if has_month and has_day:
-            hits.append(where.sql(dialect=DIALECT))
+            hits.append(where.sql(dialect=RENDER_DIALECT))
     return hits
 
 
@@ -192,7 +231,7 @@ def check_row_number_partition(tree):
         if not is_row_number:
             continue
         parts = window.args.get("partition_by") or []
-        keys = ", ".join(p.sql(dialect=DIALECT) for p in parts) if parts else "(none)"
+        keys = ", ".join(p.sql(dialect=RENDER_DIALECT) for p in parts) if parts else "(none)"
         hits.append(f"row_number() OVER (PARTITION BY {keys})")
     return hits
 
@@ -249,7 +288,7 @@ def check_join_where_duplicate_filter(tree):
         for term in _collect_and_terms(on):
             sig = _equality_signature(term)
             if sig:
-                join_sigs[sig] = term.sql(dialect=DIALECT)
+                join_sigs[sig] = term.sql(dialect=RENDER_DIALECT)
 
     hits = []
     seen = set()
@@ -283,7 +322,7 @@ def check_repeated_derived_expressions(tree, threshold=3):
         )
         if not is_interesting:
             continue
-        s = n.sql(dialect=DIALECT)
+        s = n.sql(dialect=RENDER_DIALECT)
         # Skip trivial single-arg wrappers (e.g. `CAST(col AS STRING)` is fine repeated)
         if len(s) < 25:
             continue
@@ -334,7 +373,7 @@ def _ci_join_signatures(tree):
         for term in _collect_and_terms(on):
             sig = _equality_signature(term)
             if sig:
-                sigs.append((tbl_name, sig, term.sql(dialect=DIALECT)))
+                sigs.append((tbl_name, sig, term.sql(dialect=RENDER_DIALECT)))
     return sigs
 
 
@@ -438,7 +477,7 @@ def check_count_distinct(tree):
     for cnt in tree.find_all(exp.Count):
         inner = cnt.args.get("this")
         if isinstance(inner, exp.Distinct):
-            hits.append(cnt.sql(dialect=DIALECT))
+            hits.append(cnt.sql(dialect=RENDER_DIALECT))
     return hits
 
 
@@ -450,7 +489,7 @@ def check_count_star(tree):
     for cnt in tree.find_all(exp.Count):
         inner = cnt.args.get("this")
         if isinstance(inner, exp.Star):
-            hits.append(cnt.sql(dialect=DIALECT))
+            hits.append(cnt.sql(dialect=RENDER_DIALECT))
     return hits
 
 
@@ -466,7 +505,7 @@ def check_try_convert_currency_arity(tree):
         if isinstance(n, exp.Anonymous) and (n.name or "").lower() == "try_convert_currency":
             args = n.args.get("expressions") or []
             if len(args) != 3:
-                hits.append((n.sql(dialect=DIALECT), len(args)))
+                hits.append((n.sql(dialect=RENDER_DIALECT), len(args)))
     return hits
 
 
@@ -560,7 +599,7 @@ def check_top_level_distinct(tree):
                 outer = s
                 break
     if outer is not None and outer.args.get("distinct"):
-        hits.append(outer.sql(dialect=DIALECT)[:120] + "…")
+        hits.append(outer.sql(dialect=RENDER_DIALECT)[:120] + "…")
     return hits
 
 
@@ -581,7 +620,7 @@ def check_top_level_order_by(tree):
     if order is not None:
         # Confirm it's not nested inside a Window — find_all from outer.args
         # gives us only the direct ORDER BY, not OVER's.
-        hits.append(order.sql(dialect=DIALECT))
+        hits.append(order.sql(dialect=RENDER_DIALECT))
     return hits
 
 
@@ -608,7 +647,7 @@ def check_exists_subquery(tree):
     for node in tree.walk():
         n = node[0] if isinstance(node, tuple) else node
         if isinstance(n, exp.Exists):
-            hits.append(n.sql(dialect=DIALECT)[:120])
+            hits.append(n.sql(dialect=RENDER_DIALECT)[:120])
     return hits
 
 
@@ -639,7 +678,7 @@ def check_in_subquery_unaliased(tree):
         if isinstance(only, exp.Alias):
             continue
         # Bare Column or expression — needs an alias.
-        hits.append(n.sql(dialect=DIALECT)[:120])
+        hits.append(n.sql(dialect=RENDER_DIALECT)[:120])
     return hits
 
 
@@ -662,7 +701,7 @@ def check_alias_equals_field_name(tree):
         src = (target.name or "")
         out = (alias.alias or "")
         if src and out and src.lower() == out.lower():
-            hits.append(f"{target.sql(dialect=DIALECT)} AS {out}")
+            hits.append(f"{target.sql(dialect=RENDER_DIALECT)} AS {out}")
     return hits
 
 
@@ -743,7 +782,7 @@ def check_datediff_in_case(tree):
             if n is case:
                 continue
             if _is_datediff(n):
-                hits.append(case.sql(dialect=DIALECT)[:140] + "…")
+                hits.append(case.sql(dialect=RENDER_DIALECT)[:140] + "…")
                 break
     return hits
 
@@ -754,7 +793,7 @@ def check_avg_case_nesting(tree):
     for avg in tree.find_all(exp.Avg):
         inner = avg.args.get("this")
         if isinstance(inner, exp.Case):
-            hits.append(avg.sql(dialect=DIALECT)[:140] + "…")
+            hits.append(avg.sql(dialect=RENDER_DIALECT)[:140] + "…")
     return hits
 
 
@@ -802,7 +841,7 @@ def check_case_mixed_types(tree):
             continue
         concrete = types - {"null", "other"}
         if concrete:
-            hits.append(case.sql(dialect=DIALECT)[:140] + "…")
+            hits.append(case.sql(dialect=RENDER_DIALECT)[:140] + "…")
     return hits
 
 
@@ -886,7 +925,7 @@ def check_concat_aggregate_provenance(tree):
                 if inner_n is n:
                     continue
                 if isinstance(inner_n, aggregate_types):
-                    hits.append(cc.sql(dialect=DIALECT)[:140] + "…")
+                    hits.append(cc.sql(dialect=RENDER_DIALECT)[:140] + "…")
                     break
             else:
                 continue
@@ -948,7 +987,7 @@ def check_simple_case(tree):
     hits = []
     for case in tree.find_all(exp.Case):
         if case.args.get("this") is not None:
-            hits.append(case.sql(dialect=DIALECT)[:140] + "…")
+            hits.append(case.sql(dialect=RENDER_DIALECT)[:140] + "…")
     return hits
 
 
@@ -958,7 +997,7 @@ def check_not_compound(tree):
     for n in tree.find_all(exp.Not):
         inner = _unwrap(n.this)
         if isinstance(inner, (exp.And, exp.Or)):
-            hits.append(n.sql(dialect=DIALECT)[:140])
+            hits.append(n.sql(dialect=RENDER_DIALECT)[:140])
     return hits
 
 
@@ -969,7 +1008,7 @@ def check_first_case(tree):
     hits = []
     for first in tree.find_all(exp.First):
         if isinstance(_unwrap(first.args.get("this")), exp.Case):
-            hits.append(first.sql(dialect=DIALECT)[:140] + "…")
+            hits.append(first.sql(dialect=RENDER_DIALECT)[:140] + "…")
     return hits
 
 
@@ -981,7 +1020,7 @@ def check_select_subquery(tree):
             for node in proj.walk():
                 n = node[0] if isinstance(node, tuple) else node
                 if isinstance(n, exp.Subquery) and not isinstance(n.parent, (exp.In, exp.Exists)):
-                    hits.append(n.sql(dialect=DIALECT)[:120] + "…")
+                    hits.append(n.sql(dialect=RENDER_DIALECT)[:120] + "…")
     return list(dict.fromkeys(hits))
 
 
@@ -1010,7 +1049,7 @@ def parse_file(path):
     """
     sql = path.read_text()
     try:
-        return sqlglot.parse(sql, read=DIALECT), sql, None
+        return _record_source_spelling(sqlglot.parse(sql, read=DIALECT), sql), sql, None
     except Exception as e:
         return None, sql, str(e)
 
