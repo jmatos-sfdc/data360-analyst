@@ -60,8 +60,10 @@ def _fn(tool):
 
 def test_run_sql_refuses_without_calling_the_org(monkeypatch):
     monkeypatch.setattr(mcp_server, "_post", lambda *a, **k: pytest.fail("org was called"))
+    monkeypatch.setattr(mcp_server, "ORG_ALIAS", "demo")
     out = _fn(mcp_server.run_sql)("SELECT ssot__Email__c FROM t")
     assert out["_blocked"] == "customer_data"
+    assert "export-sql-csv --org demo" in out["csv_export"]
     assert out["query_editor_sql"] == "SELECT ssot__Email__c FROM t"
 
 

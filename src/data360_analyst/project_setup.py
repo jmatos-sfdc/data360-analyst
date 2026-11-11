@@ -42,6 +42,8 @@ This folder is a Data 360 analysis project for the org `{org}`, set up with the 
   return record-level values (customer data): show the `query_editor_sql` for the user to run in Query Editor and
   don't rewrite the query to get past the check. For every row as a file, the user runs
   `! data360 export-sql-csv --org {org} --sql <file.sql> --out <file.csv>` themselves; don't run it or read the CSV.
+- To explain one CI on a page someone can hand on (its semantic model and the SQL, annotated):
+  `data360 ci-visualize --client-root . --name <CI>__cio --out reports/<CI>-onboarding.html`.
 - Lead with the answer in a few short lines. When asked for proof, show the SQL lines behind the finding and the
   confirm query from `reports/ci-audit.md`.
 - The toolkit is read-only against the org. Don't change files in `object-model/` by hand; re-run intake instead.

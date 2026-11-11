@@ -403,7 +403,7 @@ def get_ci_rows(ci_name: str, limit: int = 100) -> dict:
     (COUNT, SUM, AVG) over the CI's `__cio` object."""
     name = ci_name if ci_name.endswith("__cio") else f"{ci_name}__cio"
     sql = f"SELECT * FROM {name} LIMIT {int(limit)}"
-    return sql_guard.refusal(sql, "a CI's output rows are per-record values")
+    return _refuse(sql, "a CI's output rows are per-record values")
 
 
 _TRANSFORM_SLIM_FIELDS = ("createdDate", "creationType", "status")
@@ -603,6 +603,15 @@ def list_ir_rulesets() -> dict:
 _ALLOWED_QUERY_IDS: set[str] = set()
 
 
+def _refuse(sql: str, reason: str) -> dict:
+    """sql_guard's refusal plus the user-run CSV export for this org, for when they need every row as a file."""
+    out = sql_guard.refusal(sql, reason)
+    out["csv_export"] = (f"Every row as a file: save the SQL to a .sql file, then the user runs "
+                         f"`data360 export-sql-csv --org {ORG_ALIAS or '<alias>'} --sql <file.sql> --out <file.csv>` "
+                         f"themselves (prefix it with ! in Claude Code). Don't run it for them.")
+    return out
+
+
 @mcp.tool
 def run_sql(query: str) -> dict:
     """Submit a Data Cloud SQL query (async). Only aggregate-only queries run: every output
@@ -615,7 +624,7 @@ def run_sql(query: str) -> dict:
     for aggregate queries — do not use it as a stop condition when paging."""
     reason = sql_guard.check(query)
     if reason:
-        return sql_guard.refusal(query, reason)
+        return _refuse(query, reason)
     result = _post("/ssot/query-sql", {"sql": query})
     qid = (result.get("status") or {}).get("queryId") if isinstance(result, dict) else None
     if qid:
