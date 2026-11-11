@@ -40,7 +40,7 @@ When answering from the snapshot doesn't apply, use the MCP tools:
 - **CI review:** `list_cis` → pull SQL from `expression` field → decode HTML entities → analyze joins, filters, aggregations
 - **Data Transforms:** `list_transforms` → `get_transform` for the node DAG → decode `formulaExpression` fields
 - **DPEs:** `list_dpes` → `get_dpe` for source CIs, writeback sequence, target objects, upsert keys, relationships, and exact field mappings
-- **Live SQL:** `run_sql` for ad-hoc queries against DMOs and CIs → `get_sql_rows` for results
+- **Live SQL:** `run_sql` for aggregate queries (counts, totals) against DMOs and CIs → `get_sql_rows` for further pages. A record-level query comes back `_blocked` with `query_editor_sql`: give the user that SQL to run in Query Editor, and don't rewrite it to get past the check. For full rows as a file, the user runs `data360 export-sql-csv` themselves.
 - **Segments:** `list_segments` for criteria trees
 - **Streams:** `list_streams` for connector mappings and row counts
 

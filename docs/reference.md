@@ -26,6 +26,8 @@ The [Skills](../README.md#skills) are the high-level workflows. Underneath, the 
 
 All tools are read-only — there are no `create_*`, `update_*`, or `delete_*` tools by design. The Data 360 SQL engine itself rejects anything other than `SELECT` on `run_sql`.
 
+`run_sql` runs aggregate-only queries (COUNT, SUM, AVG, APPROX_COUNT_DISTINCT, STDDEV, VARIANCE; MIN and MAX over date or numeric fields; literals). Anything that returns record-level values comes back `_blocked` with `query_editor_sql` to run in Query Editor. `get_ci_rows` always returns that SQL rather than rows, and `get_sql_rows` pages only ids from guarded `run_sql` calls. The check is `sql_guard.py`, and it fails closed on SQL it can't parse.
+
 ## Using the CLI directly
 
 If you prefer running the tools yourself (for batch snapshots, CI pipelines, or non-Claude workflows) — no Claude, no MCP, just the `data360` command after `pip install -e .`.
@@ -48,7 +50,7 @@ Every subcommand and the job it does:
 | `cluster-cis` | Cluster the CIs built on one DMO by naming pattern and join shape | no |
 | `diagram-crosscheck` | Match a Lucidchart diagram against the on-disk inventory | no |
 | `dashboard` | Assemble reports + sidecars into a single-page HTML dashboard | no |
-| `export-sql-csv` | Page a full SQL result to CSV past the display / response caps | yes |
+| `export-sql-csv` | Page a full SQL result to CSV past the display / response caps (user-run: the rows are customer data, and project folders deny it to Claude) | yes |
 | `mcp-server` | Run the local read-only MCP server | yes |
 | `provenance-validate` | Structurally validate a provenance report config | no |
 | `provenance-render` | Render a validated provenance config to interactive HTML | no |

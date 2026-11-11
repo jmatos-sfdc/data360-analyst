@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from data360_analyst.sf_auth import get_token_and_url, SfAuthError, SfCliMissing
+from data360_analyst import sql_guard
 
 try:
     import yaml
@@ -397,8 +398,12 @@ def get_ci_sql(ci_name: str) -> dict:
 
 @mcp.tool
 def get_ci_rows(ci_name: str, limit: int = 100) -> dict:
-    """Fetch rows from a Calculated Insight's output object."""
-    return _get(f"/ssot/insight/calculated-insights/{urllib.parse.quote(ci_name)}", {"limit": limit})
+    """Not run: a CI's output rows are per-record values, which can be customer data. Returns the
+    Query Editor SQL to show the user instead. For an answer here, use `run_sql` with an aggregate
+    (COUNT, SUM, AVG) over the CI's `__cio` object."""
+    name = ci_name if ci_name.endswith("__cio") else f"{ci_name}__cio"
+    sql = f"SELECT * FROM {name} LIMIT {int(limit)}"
+    return sql_guard.refusal(sql, "a CI's output rows are per-record values")
 
 
 _TRANSFORM_SLIM_FIELDS = ("createdDate", "creationType", "status")
@@ -595,21 +600,37 @@ def list_ir_rulesets() -> dict:
     return _get("/ssot/identity-resolutions")
 
 
+_ALLOWED_QUERY_IDS: set[str] = set()
+
+
 @mcp.tool
 def run_sql(query: str) -> dict:
-    """Submit a Data Cloud SQL query (async). First chunk of rows comes back in `data`;
-    the query id for further pages is `status.queryId` (not a top-level field) — pass
-    that to `get_sql_rows` as `job_id`. `status.rowCount` is an ESTIMATE for GROUP BY /
-    aggregate queries — do not use it as a stop condition when paging."""
-    return _post("/ssot/query-sql", {"sql": query})
+    """Submit a Data Cloud SQL query (async). Only aggregate-only queries run: every output
+    column must be COUNT, SUM, AVG, APPROX_COUNT_DISTINCT, STDDEV or VARIANCE (MIN/MAX only over
+    date or numeric fields) or a literal, with no GROUP BY key in the output. A query that would return record-level values (customer
+    data) is not run; the response has `_blocked`, a `reason`, and `query_editor_sql`. Show the
+    user that SQL to run in Data Cloud Query Editor, and don't rewrite it to get around the check.
+    For a run query, the first chunk comes back in `data`; the query id for further pages is
+    `status.queryId` — pass that to `get_sql_rows` as `job_id`. `status.rowCount` is an ESTIMATE
+    for aggregate queries — do not use it as a stop condition when paging."""
+    reason = sql_guard.check(query)
+    if reason:
+        return sql_guard.refusal(query, reason)
+    result = _post("/ssot/query-sql", {"sql": query})
+    qid = (result.get("status") or {}).get("queryId") if isinstance(result, dict) else None
+    if qid:
+        _ALLOWED_QUERY_IDS.add(qid)
+    return result
 
 
 @mcp.tool
 def get_sql_rows(job_id: str, offset: int = 0) -> dict:
-    """Fetch one page of rows for a previously submitted SQL query job (`status.queryId`
-    from `run_sql`), starting at `offset`. Keep calling with increasing offset (e.g.
-    += len(data) each time) until `data` is empty or the response is `{"_error": 400, ...}`
-    — both mean end-of-data, not a failure."""
+    """Fetch one page of rows for a query submitted by `run_sql` in this session (`status.queryId`),
+    starting at `offset`. Keep calling with increasing offset (e.g. += len(data) each time) until
+    `data` is empty or the response is `{"_error": 400, ...}` — both mean end-of-data, not a failure."""
+    if job_id not in _ALLOWED_QUERY_IDS:
+        return {"_blocked": "unknown_query",
+                "message": "Only queries submitted through run_sql in this session can be paged."}
     return _get(f"/ssot/query-sql/{urllib.parse.quote(job_id)}/rows", {"offset": offset})
 
 

@@ -74,7 +74,7 @@ Report back in a few lines, not a dump:
 
 All read-only. Object model (`list_dmos`, `get_dmo`, `get_dmo_relationships`), DLOs and mappings, Calculated Insights
 (`list_cis`, `get_ci_sql`, `get_ci_rows`), transforms, DPEs, streams, segments, activations, `list_ir_rulesets`, SQL
-(`run_sql`, `get_sql_rows`), and lineage (`lineage_summary`, `get_upstream`, `get_downstream`, `shortest_path`,
+(`run_sql`, `get_sql_rows`; counts and totals only, record-level queries come back as Query Editor SQL), and lineage (`lineage_summary`, `get_upstream`, `get_downstream`, `shortest_path`,
 `find_orphans`). A second org gets its own project folder; don't register two orgs in one folder.
 
 ## Containment rule

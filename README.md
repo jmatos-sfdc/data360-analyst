@@ -58,7 +58,7 @@ Point it at a live org instead of `--snapshot` — `data360 analyze <alias>` —
 ## Why it's different
 
 - **The whole org in context, at once.** `intake.py` snapshots every DMO, CI, transform, stream, segment, and activation to local files, so Claude can reason across the entire object model in one pass — trace lineage, spot duplicated logic, find every CI that touches a field. The Data 360 app shows one object at a time with no cross-object search; there is no screen where you see it all.
-- **Two layers of data safety, not one.** The MCP server is read-only by construction — no `create`/`update`/`delete` tools, and the SQL engine rejects anything but `SELECT`. On top of that, the shipped `CLAUDE.md` and skills instruct the model to keep customer row-level data out of its context: it works from metadata and aggregates, not individual records. Safe to point at production, and appropriate for engagements under a data-processing agreement.
+- **Two layers of data safety, not one.** The MCP server is read-only by construction — no `create`/`update`/`delete` tools, and the SQL engine rejects anything but `SELECT`. On top of that, customer row-level data stays out of the model's context: `run_sql` only runs queries whose output is counts and totals (`sql_guard.py` checks the SQL before it reaches the org), and a query that would return records comes back with the SQL to run in Query Editor instead. Safe to point at production, and appropriate for engagements under a data-processing agreement.
 - **Diff-able, version-controllable snapshots.** Intake output is plain YAML + raw `.sql` on disk. `git diff` a snapshot against the prior one to see exactly what changed in an org before and after a deploy; use `/data360-compare` for a structured schema diff across two different orgs (sandbox vs. prod) — comparisons the UI can't give you.
 - **Offline, self-contained artifacts.** The dashboard, CI Visualize, and provenance reports are single HTML files with no org connection and no row-level data — hand one to a stakeholder who has no Data 360 license.
 - **Your permissions, no stored credentials.** It reuses your existing `sf` CLI session, so the toolkit has exactly the access you do and never persists a secret.
@@ -254,13 +254,7 @@ data360 provenance-render \
 
 `export_sql_csv.py` pulls a complete Data 360 SQL result to CSV. The Query Editor caps display at 1,000 rows and a single `/ssot/query-sql` response tops out around 90k — both truncate *silently*. This pages the entire result set with offset pagination (verified past 150k rows) and writes every row to disk. You run it against your own org and the rows land in a local CSV, so it stays outside the read-only MCP surface by design.
 
-In Claude Code you just ask:
-
-> **You:** "This query returns more than 100k rows — export the full result to CSV, not just the first page."
->
-> Claude runs `data360 export-sql-csv` against your org and writes every row to a local CSV, paging past the display and response caps.
-
-Or run the script directly:
+The rows are customer data, so you run the export yourself; Claude doesn't. `data360 init-project` denies the command to Claude in a project folder, and in Claude Code you can still run it with the `!` prefix so the output lands in your terminal, not in the conversation:
 
 ```bash
 # Full result set to CSV
@@ -299,6 +293,8 @@ The toolkit ships with Claude Code Skills that let you invoke specific workflows
 The skills above are the high-level workflows. Underneath, the MCP server exposes **26 read-only tools** that Claude calls directly, grouped across DMOs, DLOs, Calculated Insights, Data Transforms, DPE, Streams, Segments, Activations, Identity Resolution, SQL, and snapshot-backed Lineage. You normally won't invoke these by name — see **[docs/reference.md](docs/reference.md#mcp-tool-catalog)** for the full catalog.
 
 All tools are read-only — there are no `create_*`, `update_*`, or `delete_*` tools by design. The Data 360 SQL engine itself rejects anything other than `SELECT` on `run_sql`.
+
+Live SQL returns aggregates only. `run_sql` checks the query before it is sent: every output column has to be COUNT, SUM, AVG, APPROX_COUNT_DISTINCT, STDDEV or VARIANCE (MIN and MAX only over date or numeric fields), or a literal. A bare column, `SELECT *`, a GROUP BY key in the output, or a window function is refused, and the response carries `query_editor_sql`, the same SQL for you to run in Query Editor, where the rows stay in the org. SQL that doesn't parse is refused too. `get_ci_rows` always returns the Query Editor SQL, because a CI's output rows are per-record values. `get_sql_rows` only pages queries that `run_sql` let through in the same session.
 
 ## What's under the hood
 
@@ -354,7 +350,7 @@ The request path is diagrammed under [Quick start](#quick-start). What each hop 
 
 **Auth:** The toolkit never stores credentials. It shells out to the sf CLI to get a fresh access token (`sf org auth show-access-token` on sf CLI versions released after May 27, 2026; `sf org display` on older versions — `sf_auth.py` handles both), reusing the OAuth session you already established with `sf org login web`. Your Salesforce permissions are the only permissions the toolkit has.
 
-**MCP server:** `mcp_server.py` exposes the org's Data 360 REST endpoints as MCP tools — `list_dmos`, `get_ci_metadata`, `list_segments`, `run_sql`, etc. Read-only by design: no create/update/delete tools, and the Data 360 SQL engine itself rejects anything other than `SELECT`. `run_sql` + `get_sql_rows` page results via `offset`; `status.rowCount` is an estimate for aggregate queries, so callers page until `data` comes back empty rather than trusting the count.
+**MCP server:** `mcp_server.py` exposes the org's Data 360 REST endpoints as MCP tools — `list_dmos`, `get_ci_metadata`, `list_segments`, `run_sql`, etc. Read-only by design: no create/update/delete tools, and the Data 360 SQL engine itself rejects anything other than `SELECT`. `run_sql` only runs aggregate-only queries (see `sql_guard.py`) and returns Query Editor SQL for the rest; `run_sql` + `get_sql_rows` page results via `offset`; `status.rowCount` is an estimate for aggregate queries, so callers page until `data` comes back empty rather than trusting the count.
 
 **Scripts:** The REST APIs return raw artifacts (CI SQL is HTML-entity-encoded; transform DAGs are deeply nested JSON). The Python scripts decode, parse, and produce YAML sidecars, markdown reports, raw `.sql` files, and the HTML dashboard.
 

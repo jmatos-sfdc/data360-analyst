@@ -38,6 +38,10 @@ This folder is a Data 360 analysis project for the org `{org}`, set up with the 
   from the snapshot.
 - Go live (the `data360` MCP tools, or `data360 intake` to refresh) only when asked, or when the answer can't come
   from the snapshot (row counts, current job status).
+- Live SQL returns counts and totals only. When `run_sql` or `get_ci_rows` comes back `_blocked`, the query would
+  return record-level values (customer data): show the `query_editor_sql` for the user to run in Query Editor and
+  don't rewrite the query to get past the check. For every row as a file, the user runs
+  `! data360 export-sql-csv --org {org} --sql <file.sql> --out <file.csv>` themselves; don't run it or read the CSV.
 - Lead with the answer in a few short lines. When asked for proof, show the SQL lines behind the finding and the
   confirm query from `reports/ci-audit.md`.
 - The toolkit is read-only against the org. Don't change files in `object-model/` by hand; re-run intake instead.
@@ -46,7 +50,8 @@ This folder is a Data 360 analysis project for the org `{org}`, set up with the 
 PROJECT_SETTINGS = {
     "permissions": {
         "allow": ["Bash(data360:*)", "Read", "Grep", "Glob", "Skill", "mcp__data360"],
-        "deny": ["Edit(object-model/**)"],  # Edit rules cover every file-writing tool
+        # Edit rules cover every file-writing tool. The CSV export writes customer rows, so only the user runs it.
+        "deny": ["Edit(object-model/**)", "Bash(data360 export-sql-csv:*)"],
     }
 }
 
