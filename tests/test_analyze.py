@@ -93,3 +93,37 @@ def test_suspect_cis_reports_parse_error():
     ranked = analyze.suspect_cis({"Broken__cio.sql": {"parse_error": "boom"}})
     assert ranked[0]["name"] == "Broken__cio.sql"
     assert "parse error" in ranked[0]["problems"][0]
+
+
+def _ruleset(tmp_path, criteria):
+    import yaml
+    d = tmp_path / "object-model" / "identity-resolutions"
+    d.mkdir(parents=True)
+    (d / "R.yaml").write_text(yaml.safe_dump({
+        "name": "R", "primaryDmo": "ssot__Individual__dlm",
+        "matchRules": [{"label": "Rule", "criteria": criteria}]}))
+    return tmp_path
+
+
+def test_over_merge_flags_email_only_rule(tmp_path):
+    snap = _ruleset(tmp_path, [{"entity": "ssot__ContactPointEmail__dlm",
+                                "field": "ssot__EmailAddress__c", "method": "exact"}])
+    [hit] = analyze.over_merge_rules(snap)
+    assert hit["fields"] == ["ssot__EmailAddress__c"]
+    assert "COUNT(DISTINCT i.ssot__LastName__c)" in hit["check"]
+    assert "FROM ssot__ContactPointEmail__dlm cp" in hit["check"]
+
+
+def test_over_merge_ignores_rule_with_name_qualifier(tmp_path):
+    snap = _ruleset(tmp_path, [
+        {"entity": "ssot__ContactPointEmail__dlm", "field": "ssot__EmailAddress__c", "method": "exact"},
+        {"entity": "ssot__Individual__dlm", "field": "ssot__FirstName__c", "method": "fuzzy"}])
+    assert analyze.over_merge_rules(snap) == []
+
+
+def test_ask_routes_identity_question_to_over_merge(tmp_path):
+    snap = _ruleset(tmp_path, [{"entity": "ssot__ContactPointPhone__dlm",
+                                "field": "ssot__FormattedE164PhoneNumber__c", "method": "exact"}])
+    out = analyze.render_answers(analyze.analyze_snapshot(snap), "which match rules over-merge?")
+    assert "## Identity resolution over-merge risk" in out
+    assert "R / Rule" in out

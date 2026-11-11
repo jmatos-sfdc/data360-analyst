@@ -152,6 +152,15 @@ def build_graph(output_dir):
         add_node(name, "Activation", label=d.get("label"),
                  targetType=d.get("activationType"), status=d.get("status"))
 
+    rulesets = {}
+    for fname, d in load_sidecar_dir(om, "identity-resolutions"):
+        name = d.get("name")
+        if not name:
+            continue
+        rulesets[name] = d
+        add_node(name, "IdentityResolution", status=d.get("status"),
+                 rulesetId=d.get("rulesetId"))
+
     # ── Pass 2: edges ────────────────────────────────────────────────────────
 
     # Stream → DLO from the stream sidecar's `dataLakeObjectName`. If the field
@@ -207,6 +216,27 @@ def build_graph(output_dir):
         for upstream_ci in sorted(referenced_cis):
             add_edge(upstream_ci, ci_name, "read_by")
 
+    # Source DMO → IR ruleset → unified DMO. The ruleset reads its primary DMO
+    # and every match-rule entity, and writes one unified DMO per reconciled
+    # source. Unified DMOs exist only as the ruleset's output, so this is the
+    # only path from ingested data to a segment built on a unified profile.
+    for rname, r in rulesets.items():
+        sources = {r.get("primaryDmo")} | {c.get("entity") for m in r.get("matchRules") or []
+                                           for c in m.get("criteria") or []}
+        for src in sorted(x for x in sources if x):
+            if src in dmos:
+                add_edge(src, rname, "resolved_by")
+            else:
+                unresolved.append({"from": src, "to": rname, "relation": "resolved_by",
+                                   "reason": f"DMO {src} not in inventory"})
+        for u in r.get("unifiedObjects") or []:
+            target = u.get("unified")
+            if target and target not in dmos:
+                dmos[target] = {"name": target}
+                add_node(target, "DMO", namespace=None, category="Unified")
+            if target:
+                add_edge(rname, target, "unifies")
+
     # DMO/CI → Segment via segmentOnApiName + criteriaObjects.
     for sname, seg in segments.items():
         root = seg.get("segmentOnApiName")
@@ -227,11 +257,16 @@ def build_graph(output_dir):
                 unresolved.append({"from": obj, "to": sname, "relation": "criteria_uses",
                                    "reason": "criteriaObjects entry not in inventory"})
 
-    # Segment → Activation.
+    # Segment → Activation. The activation's segmentApiName can hold the segment's
+    # display name rather than its apiName (seen when the name has characters
+    # the apiName replaces, e.g. "a.b@c.com" vs "a_b_c_com"), so fall back to it.
+    by_display = {seg.get("displayName"): sname for sname, seg in segments.items()
+                  if seg.get("displayName")}
     for aname, act in activations.items():
         seg_ref = act.get("segmentApiName")
         if not seg_ref:
             continue
+        seg_ref = seg_ref if seg_ref in segments else by_display.get(seg_ref, seg_ref)
         if seg_ref in segments:
             add_edge(seg_ref, aname, "activates")
         else:

@@ -927,12 +927,13 @@ LINEAGE_TYPE_COLORS = {
     "DLO": "#0d9488",
     "DMO": "#2563eb",
     "CI": "#7c3aed",
+    "IdentityResolution": "#db2777",
     "Segment": "#d97706",
     "Activation": "#dc2626",
 }
 # Left-to-right column order matches Data Cloud's data flow:
-# Stream → DLO → DMO → CI → Segment → Activation.
-LINEAGE_TYPE_ORDER = ["Stream", "DLO", "DMO", "CI", "Segment", "Activation"]
+# Stream → DLO → DMO → IR ruleset → CI → Segment → Activation.
+LINEAGE_TYPE_ORDER = ["Stream", "DLO", "DMO", "IdentityResolution", "CI", "Segment", "Activation"]
 
 
 def build_node_meta(data_dir):

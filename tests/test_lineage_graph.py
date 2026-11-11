@@ -44,3 +44,42 @@ def test_parse_ci_dependencies_resolves_dmo_refs():
     assert deps
     # At least one CI query references a DMO from the snapshot.
     assert any(dmos for dmos, cis in deps.values())
+
+
+def _write(om, sub, name, doc):
+    import yaml
+    (om / sub).mkdir(parents=True, exist_ok=True)
+    (om / sub / f"{name}.yaml").write_text(yaml.safe_dump(doc))
+
+
+def _ir_snapshot(tmp_path, activation_segment_ref):
+    om = tmp_path / "object-model"
+    _write(om, "dmos", "ssot__Individual__dlm", {"name": "ssot__Individual__dlm"})
+    _write(om, "dmos", "ssot__ContactPointEmail__dlm", {"name": "ssot__ContactPointEmail__dlm"})
+    _write(om, "identity-resolutions", "Rules", {
+        "name": "Rules", "primaryDmo": "ssot__Individual__dlm",
+        "matchRules": [{"label": "Exact Email", "criteria": [
+            {"entity": "ssot__ContactPointEmail__dlm", "field": "ssot__EmailAddress__c", "method": "exact"}]}],
+        "unifiedObjects": [{"source": "ssot__Individual__dlm", "unified": "UnifiedssotIndividualX__dlm",
+                            "link": "UnifiedLinkssotIndividualX__dlm"}],
+    })
+    _write(om, "segments", "a_b_com", {"apiName": "a_b_com", "displayName": "a.b@com",
+                                       "segmentOnApiName": "UnifiedssotIndividualX__dlm"})
+    _write(om, "activations", "Act", {"name": "Act", "segmentApiName": activation_segment_ref})
+    return tmp_path
+
+
+def test_identity_resolution_bridges_source_dmos_to_unified_segment(tmp_path):
+    graph = lineage_graph.build_graph(str(_ir_snapshot(tmp_path, "a_b_com")))
+    edges = {(e["from"], e["relation"], e["to"]) for e in graph["edges"]}
+    assert ("ssot__Individual__dlm", "resolved_by", "Rules") in edges
+    assert ("ssot__ContactPointEmail__dlm", "resolved_by", "Rules") in edges
+    assert ("Rules", "unifies", "UnifiedssotIndividualX__dlm") in edges
+    assert ("UnifiedssotIndividualX__dlm", "criteria_uses", "a_b_com") in edges
+    assert graph["unresolved"] == []
+
+
+def test_activation_resolves_segment_by_display_name(tmp_path):
+    graph = lineage_graph.build_graph(str(_ir_snapshot(tmp_path, "a.b@com")))
+    edges = {(e["from"], e["relation"], e["to"]) for e in graph["edges"]}
+    assert ("a_b_com", "activates", "Act") in edges

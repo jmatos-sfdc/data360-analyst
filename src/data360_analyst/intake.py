@@ -491,6 +491,40 @@ def emit_yaml_sidecars(output_dir, org_meta, dmos, dlos, mappings, cis, transfor
         }
         _persist("activations", name, doc)
 
+    # Identity resolution rulesets — match rules plus the unified/link DMOs each
+    # ruleset produces, so lineage can bridge source DMOs to the unified DMOs
+    # that segments are built on, and analyze can check the match rules.
+    for ir in ir_items:
+        name = ir.get("label") or ir.get("developerName") or ir.get("name")
+        if not name:
+            continue
+        doc = {
+            "name": name,
+            "rulesetId": ir.get("rulesetId"),
+            "configurationType": ir.get("configurationType"),
+            "primaryDmo": ir.get("secondaryDmo"),
+            "dataSpace": ir.get("dataSpaceName"),
+            "status": ir.get("rulesetStatus"),
+            "lastJobStatus": ir.get("lastJobStatus"),
+            "lastJobCompleted": ir.get("lastJobCompleted"),
+            "sourceProfiles": ir.get("sourceProfiles"),
+            "unifiedProfiles": ir.get("totalUnifiedProfiles"),
+            "consolidationRate": ir.get("consolidationRate"),
+            "matchRules": [
+                {"label": r.get("label"),
+                 "criteria": [{"entity": c.get("entityName"), "field": c.get("fieldName"),
+                               "method": c.get("matchMethodType")}
+                              for c in r.get("criteria") or []]}
+                for r in ir.get("matchRules") or []
+            ],
+            "unifiedObjects": [
+                {"source": r.get("entityName"), "unified": r.get("unifiedDmoName"),
+                 "link": r.get("linkDmoName")}
+                for r in ir.get("reconciliationRules") or [] if r.get("unifiedDmoName")
+            ],
+        }
+        _persist("identity-resolutions", name, doc)
+
     # Schema-drift check — fingerprint field presence and warn if an endpoint
     # dropped/renamed a field intake depends on (vs the prior run's manifest).
     items_by_category = {
@@ -524,7 +558,7 @@ def emit_yaml_sidecars(output_dir, org_meta, dmos, dlos, mappings, cis, transfor
             "identityResolutionRulesets": len(ir_items),
         },
         "identityResolutionRulesets": [
-            ir.get("developerName") or ir.get("name") or ir.get("Name")
+            ir.get("label") or ir.get("developerName") or ir.get("name") or ir.get("Name")
             for ir in ir_items
         ],
     }
@@ -708,7 +742,7 @@ def generate(org_alias, output_dir, skip_streams=False, incremental=False):
     out.append("---\n## Identity Resolution\n")
     if ir_items:
         for ir in ir_items:
-            name = ir.get("developerName", ir.get("name", ir.get("Name", "?")))
+            name = ir.get("label") or ir.get("developerName") or ir.get("name") or "?"
             out.append(f"- `{name}`")
     else:
         out.append("- No identity resolution rulesets found (or not accessible)")

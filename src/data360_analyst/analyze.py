@@ -187,6 +187,43 @@ def flow_to_activations(graph):
     return flows
 
 
+# A match rule whose only criteria are these shared-contact fields fuses every
+# person behind a shared mailbox or main line (info@, frontdesk@, a switchboard
+# number) into one profile. A name criterion in the same rule is what stops it.
+_CONTACT_POINT_FIELDS = {
+    "ssot__EmailAddress__c", "ssot__FormattedE164PhoneNumber__c", "ssot__TelephoneNumber__c",
+}
+
+
+def over_merge_rules(data_dir):
+    """Identity resolution match rules that match on a contact point alone, with
+    no name or ID qualifier — the rule shape that over-merges."""
+    om = Path(data_dir).expanduser() / "object-model"
+    flagged = []
+    for _, r in lineage_graph.load_sidecar_dir(om, "identity-resolutions"):
+        for rule in r.get("matchRules") or []:
+            fields = {c.get("field") for c in rule.get("criteria") or []}
+            if fields and fields <= _CONTACT_POINT_FIELDS:
+                flagged.append({
+                    "ruleset": r.get("name"), "rule": rule.get("label"),
+                    "fields": sorted(fields),
+                    "check": _over_merge_query(rule, r),
+                })
+    return flagged
+
+
+def _over_merge_query(rule, ruleset):
+    """A Query Editor SQL that shows the over-merge: one contact value shared by
+    people with different last names."""
+    c = (rule.get("criteria") or [{}])[0]
+    primary = ruleset.get("primaryDmo") or "ssot__Individual__dlm"
+    return (f"SELECT cp.{c.get('field')} AS shared_value, "
+            f"COUNT(DISTINCT i.ssot__LastName__c) AS last_names "
+            f"FROM {c.get('entity')} cp JOIN {primary} i ON i.ssot__Id__c = cp.ssot__PartyId__c "
+            f"WHERE cp.{c.get('field')} <> '' GROUP BY cp.{c.get('field')} "
+            f"HAVING COUNT(DISTINCT i.ssot__LastName__c) > 1 ORDER BY last_names DESC")
+
+
 def analyze_snapshot(data_dir):
     """Build the full set of answers from a snapshot directory."""
     graph = lineage_graph.build_graph(data_dir)
@@ -198,6 +235,7 @@ def analyze_snapshot(data_dir):
         "orphans": find_orphans(graph),
         "suspectCis": suspect_cis(audit_results),
         "flows": flow_to_activations(graph),
+        "overMerge": over_merge_rules(data_dir),
     }
 
 
@@ -251,11 +289,25 @@ def _render_flows(answers):
     return lines
 
 
+def _render_over_merge(answers):
+    lines = ["## Identity resolution over-merge risk"]
+    rows = answers.get("overMerge") or []
+    if not rows:
+        return lines + ["- none — every match rule pairs a contact point with a qualifier", ""]
+    for r in rows:
+        lines.append(f"- {r['ruleset']} / {r['rule']}: matches on {', '.join(r['fields'])} alone. "
+                     "Everyone sharing that value becomes one profile; add a name criterion.")
+        lines.append(f"  Confirm: {r['check']}")
+    lines.append("")
+    return lines
+
+
 # Intent map for --ask: substrings -> renderer. First match wins; order matters.
 _INTENTS = [
     (("backbone", "important", "matter", "central", "core dmo", "most read", "most-read"), _render_backbone),
     (("orphan", "unused", "abandoned", "disconnected", "dead"), _render_orphans),
     (("suspect", "audit", "problem", "bug", "risky", "worst ci", "bad ci"), _render_suspects),
+    (("identity", "match rule", "merge", "unif", "ruleset"), _render_over_merge),
     (("flow", "activation", "reach", "path", "downstream to"), _render_flows),
 ]
 
@@ -268,12 +320,12 @@ def render_answers(answers, question=None):
         section = _match_intent(question)
         if section is None:
             body = ["No matching analysis for that question. Try keywords: "
-                    "backbone, orphans, suspect CIs, flow to activation.", ""]
+                    "backbone, orphans, suspect CIs, identity resolution, flow to activation.", ""]
         else:
             body = section(answers)
         return "\n".join(header + body)
     body = (_render_backbone(answers) + _render_orphans(answers)
-            + _render_suspects(answers) + _render_flows(answers))
+            + _render_suspects(answers) + _render_over_merge(answers) + _render_flows(answers))
     return "\n".join(header + body)
 
 

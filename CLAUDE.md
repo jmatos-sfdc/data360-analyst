@@ -28,7 +28,7 @@ data360-analyst/
 ├── setup.sh               One-command install: create .venv, `pip install -e .`, print next step
 ├── src/data360_analyst/
 │   ├── cli.py             `data360 <subcommand>` dispatcher + `data360 demo` (full offline pipeline on examples/demo-org) + `data360 analyze`
-│   ├── analyze.py             Answer-first layer — backbone DMOs, orphans, suspect CIs, flow-to-activation from a snapshot; powers `data360 analyze`
+│   ├── analyze.py             Answer-first layer — backbone DMOs, orphans, suspect CIs, IR over-merge rules, flow-to-activation from a snapshot; powers `data360 analyze`
 │   ├── intake.py              Generates object-model.md + YAML sidecars from a live org
 │   ├── ci_audit.py            sqlglot-based CI SQL audit (AST checks)
 │   ├── ci_convert.py          Mechanical Query Editor → CI Editor SQL converter
@@ -64,7 +64,7 @@ answers to the terminal instead of only writing report files:
 - `data360 analyze <org>` — live intake into a temp workspace, then answers (no client folder needed)
 - `data360 analyze <org> --client <name>` — live intake into `~/Projects/clients/<name>/Data360`
 - `data360 analyze --snapshot <dir>` — offline; answers from an existing snapshot (e.g. `examples/demo-org`)
-- add `--ask "<question>"` to print only the matching section (backbone DMOs, orphans, suspect CIs, flow-to-activation)
+- add `--ask "<question>"` to print only the matching section (backbone DMOs, orphans, suspect CIs, identity resolution over-merge, flow-to-activation)
 
 Per-client folder layout is opt-in via `--client`; without it, `analyze` writes to a throwaway workspace.
 Backbone DMOs are ranked by lineage fan-in (not `dmo_graph`, which is live-only and can't run offline).
@@ -112,6 +112,7 @@ Use skills by name:
 │   ├── streams/<name>.yaml
 │   ├── segments/<name>.yaml
 │   ├── activations/<name>.yaml
+│   ├── identity-resolutions/<name>.yaml   Match rules + unified/link DMOs per ruleset
 │   └── lineage.yaml          Full Stream/DMO/CI/Segment/Activation graph
 ├── queries/               SQL files for CIs and ad-hoc analysis
 ├── queries-converted/     ci_convert.py output — CI editor-compatible SQL
