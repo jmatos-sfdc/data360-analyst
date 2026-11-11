@@ -133,3 +133,10 @@ def test_flow_prints_segment_display_name():
     answers = {"flows": [{"activation": "A", "path": ["S", "seg_api", "A"]}],
                "segmentLabels": {"seg_api": "Audience"}}
     assert "S -> Audience -> A" in "\n".join(analyze._render_flows(answers))
+
+
+def test_header_names_the_folder_when_snapshot_is_cwd(tmp_path, monkeypatch):
+    from data360_analyst.analyze import render_answers
+    monkeypatch.chdir(tmp_path)
+    answers = {"dataDir": ".", "counts": {}}
+    assert render_answers(answers, question="nothing matches this").splitlines()[0] == f"# Data 360 analysis — {tmp_path.name}"

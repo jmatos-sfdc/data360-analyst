@@ -320,7 +320,10 @@ _INTENTS = [
 
 def render_answers(answers, question=None):
     """Full report, or — when `question` is given — just the matched section."""
-    header = [f"# Data 360 analysis — {answers['dataDir']}",
+    shown = answers["dataDir"]
+    if shown in (".", "./"):
+        shown = Path(shown).resolve().name  # "." tells the reader nothing; name the folder
+    header = [f"# Data 360 analysis — {shown}",
               f"_{_counts_line(answers['counts'])}_", ""]
     if question:
         section = _match_intent(question)

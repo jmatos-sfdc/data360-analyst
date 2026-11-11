@@ -46,7 +46,7 @@ This folder is a Data 360 analysis project for the org `{org}`, set up with the 
 PROJECT_SETTINGS = {
     "permissions": {
         "allow": ["Bash(data360:*)", "Read", "Grep", "Glob", "Skill", "mcp__data360"],
-        "deny": ["Edit(object-model/**)", "Write(object-model/**)"],
+        "deny": ["Edit(object-model/**)"],  # Edit rules cover every file-writing tool
     }
 }
 
