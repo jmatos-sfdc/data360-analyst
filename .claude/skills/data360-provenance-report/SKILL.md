@@ -1,9 +1,11 @@
 ---
 name: data360-provenance-report
-description: Build, validate, enrich, or upgrade an interactive provenance report for one Salesforce Data 360 Data Processing Engine. Use when the user asks to create a DPE provenance report, trace DPE writebacks into target fields or consumers, validate an existing provenance report, add onboarding explanations, or migrate an older hybrid graph report to the toolkit shell.
+description: Build, validate, enrich, or upgrade an interactive provenance report for one Salesforce Data 360 Data Processing Engine or one Calculated Insight. Use when the user asks to create a DPE or CI provenance report, trace DPE writebacks into target fields or consumers, trace a CI measure back to its streams ("where does this number come from"), validate an existing provenance report, add onboarding explanations, or migrate an older hybrid graph report to the toolkit shell.
 triggers:
   - "build provenance report"
   - "create DPE provenance report"
+  - "create CI provenance report"
+  - "where does this CI number come from"
   - "trace DPE writebacks"
   - "validate provenance report"
   - "add onboarding to provenance report"
@@ -13,9 +15,18 @@ triggers:
 # Data360 Provenance Report
 
 Generate a metadata-only, client-shippable hybrid report for one Data Processing
-Engine (DPE). The left pane contains reader-defined trace endpoints; the graph
-shows upstream sources, Calculated Insights, writebacks, target objects/fields,
-and optional derived or consumer endpoints.
+Engine (DPE) or one Calculated Insight (CI). The left pane contains reader-defined
+trace endpoints; the graph shows upstream sources, Calculated Insights, writebacks,
+target objects/fields, and optional derived or consumer endpoints.
+
+Two subjects:
+
+- **DPE**: endpoints are the CRM or target fields the DPE writes; the chain runs
+  stream → DLO → DMO → CI → writeback → target field. Use Build Mode.
+- **CI**: endpoints are the CI's output measures and dimensions; the chain stops at
+  the CI's outputs (no DPE, no writeback). Use this when the org has no DPEs, the CI
+  is consumed by segments or activations rather than written back, or the question
+  is "where does this measure come from?". Use CI Build Mode.
 
 The report configuration is the source of truth. The renderer validates the
 configuration and produces the HTML artifact from the packaged shell.
@@ -28,6 +39,7 @@ DPE, environment, client folder, or output path is ambiguous.
 | Mode | Use for |
 |---|---|
 | `build` | Create a new report from a live DPE and its upstream/downstream metadata. |
+| `build` (CI) | Create a new report for one CI's output fields, traced upstream to its streams. |
 | `validate` | Compare an existing report/config with current live metadata; report findings without editing. |
 | `enrich` | Add or refresh onboarding content while preserving graph structure and mappings. |
 | `upgrade` | Extract an older compatible hybrid report into config and render it with the current shell. |
@@ -36,7 +48,7 @@ DPE, environment, client folder, or output path is ambiguous.
 
 - Client `Data360/` folder
 - Authenticated org alias and reader-facing environment label
-- DPE `DeveloperName`
+- DPE `DeveloperName`, or for a CI report the CI API name (`<Name>__cio`)
 - Output path under `<client>/Data360/reports/`
 - Intended audience
 - Lineage boundary:
@@ -130,6 +142,36 @@ data360 provenance-render \
     browser automation when available, but report any unrun visual case honestly.
 15. Report artifact paths, evidence scope, warnings, unverifiable claims, and test
     results.
+
+## CI Build Mode
+
+For a report whose subject is one Calculated Insight. Same evidence discipline,
+containment, and output contract as Build Mode; only the chain differs.
+
+1. Resolve client, environment, data space, CI API name, audience, and output path
+   (`<client>/Data360/reports/<CI name>-provenance/`).
+2. Fetch the CI SQL and metadata (`get_ci_sql`, or `queries/<CI>.sql` and
+   `object-model/cis/<CI>.yaml` from a current snapshot). Inventory output
+   dimensions and measures, every DMO in `FROM`/`JOIN`, and every DMO field the SQL
+   reads (select list, join keys, filters, `GROUP BY`).
+3. Resolve each DMO field to its DLO field with the DLO-to-DMO field mappings
+   (`get_dlo_mapping`). Snapshot mapping sidecars carry only the object-level link;
+   fetch field mappings live. Never pair fields by similar names.
+4. Resolve each DLO to its data stream from the stream metadata.
+5. Model roles: `source` (stream) → `dlo` → `dmo` (one node per DMO field the SQL
+   uses) → `ci` → `derived_field` (one per output dimension or measure). Connect
+   them with `data_flow` edges; each DMO field feeds the CI, and the CI feeds each
+   output. Use `lineageBoundary: strict_writeback`; no `dpe`, `writeback`, or
+   `target_*` nodes. If the trace should be per-output, connect only the fields
+   each output depends on (join keys feed every output that depends on the join).
+6. Endpoints are the output fields. Set `endpointHeader` to `Measure`; put
+   `Measure` or `Dimension` in each endpoint's `technicalLabel`.
+7. Write full-tier `onboardingHtml` on the CI node (inputs, joins, filters, grain,
+   and correctness traps such as join fan-out inflating `SUM`/`COUNT`) and
+   consumer-style content on each output. Cite evidence kinds `ci_sql`,
+   `ci_metadata`, `dlo_dmo_mapping`, and `dlo_metadata`.
+8. Validate, render, and run the factual and browser checks exactly as in Build
+   Mode steps 10 to 15.
 
 ## Validate Mode
 

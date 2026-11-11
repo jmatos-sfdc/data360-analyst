@@ -89,3 +89,11 @@ def test_toolkit_indexes_public_skill():
     assert "/data360-provenance-report" in claude
     assert "/data360-provenance-report" in orchestrator
     assert "get_dpe" in orchestrator
+
+
+def test_skill_documents_ci_only_build():
+    text = skill_text()
+    assert "## CI Build Mode" in text
+    assert "Calculated Insight" in text.split("---")[1]  # description covers CI reports
+    assert "get_dlo_mapping" in text
+    assert "no `dpe`, `writeback`, or\n   `target_*` nodes" in text

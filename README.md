@@ -222,13 +222,15 @@ data360 ci-visualize --client-root ~/data360/<client> --name Customer_Order_Tota
 data360 ci-visualize --input queries/Customer_Order_Totals__cio.sql --model-only
 ```
 
-### DPE provenance reports — trace a writeback from source to target field
+### Provenance reports — trace a DPE writeback or a CI measure back to its source
 
 The `/data360-provenance-report` skill builds an interactive lineage report for a single Data Processing Engine. The left pane lists reader-chosen trace endpoints — the target fields or consumer measures the DPE writes. Click one and its path lights up through the graph: upstream sources, the Calculated Insights that feed it, each writeback in sequence, and the target object/field it lands in. The node inspector shows the exact mapping, upsert key, and evidence behind each hop.
 
 ![DPE provenance report screenshot](provenance-report-screenshot.png)
 
 A validated JSON/YAML config is the source of truth, not hand-edited HTML: `render_provenance_report.py` renders the config into the packaged shell, and `validate_provenance_config.py` checks structure first. Metadata-only by construction — no account names, customer IDs, or per-customer values — so, like CI Visualize, the artifact is safe to ship to a client. In Claude Code you don't touch the scripts directly: the skill walks the DPE body, its source CIs, and the target `sobject describe`s, then authors, validates, and renders the config for you.
+
+No DPE? The same report works for one Calculated Insight: the endpoints are the CI's output measures and dimensions, and each traces back through the DMO fields the SQL reads, their DLO field mappings, and the data streams. Ask "build a provenance report for `<Name>__cio`". It is the fastest way to show where a number comes from, and the CI node's explanation calls out traps such as a multi-way join inflating `SUM` and `COUNT`.
 
 In Claude Code you just ask:
 
@@ -288,7 +290,7 @@ The toolkit ships with Claude Code Skills that let you invoke specific workflows
 | `/data360-client-report` | Assemble findings into a client-shippable deliverable |
 | `/data360-transform-audit` | Audit Data Transform DAGs — dedup grain, formula patterns |
 | `/data360-dpe-review` | Review DPE/Data Action configurations — field mappings, upsert keys |
-| `/data360-provenance-report` | Build, validate, enrich, or upgrade an interactive DPE provenance report |
+| `/data360-provenance-report` | Build, validate, enrich, or upgrade an interactive DPE or CI provenance report |
 | `/data360-html-export` | Generate a single-page HTML dashboard from all reports |
 | `/data360-setup` | Set up a project folder for one org: auth check, CLAUDE.md, MCP server, intake, first findings |
 

@@ -27,6 +27,7 @@ def load_fixture(name):
         "parent-child.json",
         "multi-branch.json",
         "consumer-complete.json",
+        "ci-only.json",
     ],
 )
 def test_synthetic_fixtures_are_valid(name):
@@ -208,3 +209,11 @@ def test_cli_returns_nonzero_for_invalid_config(tmp_path):
     )
     assert result.returncode == 1
     assert "ERROR:" in result.stdout
+
+
+def test_ci_only_report_traces_measures_without_a_dpe():
+    config = load_fixture("ci-only.json")
+    assert not {"dpe", "writeback", "target_object", "target_field"} & {n["role"] for n in config["nodes"]}
+    upstream = collect_upstream(config, "out-total")
+    assert {"ci", "f-sale-amt", "f-sale-store", "dlo-sale", "st-sale", "st-store"}.issubset(upstream)
+    assert "out-store" not in upstream

@@ -58,7 +58,7 @@ data360 cluster-cis --dmo <dmo_name> --output-dir ~/Projects/clients/<client>/Da
 Write findings to `~/Projects/clients/<client>/Data360/reports/`. Use markdown. Each report should be self-contained and client-shippable.
 
 When the user needs an interactive explanation of one DPE's end-to-end writeback
-chain, use `/data360-provenance-report`. Keep the generated HTML and normalized
+chain, or of where one CI's measures come from, use `/data360-provenance-report`. Keep the generated HTML and normalized
 config under the client's `Data360/reports/<slug>-provenance/` directory.
 
 ## Key Data Cloud concepts

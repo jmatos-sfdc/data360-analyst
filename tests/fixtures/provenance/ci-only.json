@@ -1,0 +1,384 @@
+{
+  "schemaVersion": "1.0",
+  "report": {
+    "id": "store-score-provenance",
+    "title": "Store Score Provenance",
+    "environment": "TEST",
+    "verifiedDate": "2026-08-01",
+    "groupSelectorLabel": "Insight",
+    "leftPaneTitle": "Output fields",
+    "endpointHeader": "Measure",
+    "endpointInstruction": "click an item to trace",
+    "graphDescription": "Two streams feed two model objects; one calculated insight joins them. No DPE.",
+    "lineageBoundary": "strict_writeback",
+    "initialGroupId": "score"
+  },
+  "layers": [
+    {
+      "id": "source",
+      "label": "Stream",
+      "color": "#5470c6",
+      "order": 1
+    },
+    {
+      "id": "dlo",
+      "label": "Data lake object",
+      "color": "#73c0de",
+      "order": 2
+    },
+    {
+      "id": "dmo",
+      "label": "Model field",
+      "color": "#91cc75",
+      "order": 3
+    },
+    {
+      "id": "ci",
+      "label": "Calculated insight",
+      "color": "#fac858",
+      "order": 4
+    },
+    {
+      "id": "output",
+      "label": "Output field",
+      "color": "#ee6666",
+      "order": 5
+    }
+  ],
+  "groups": [
+    {
+      "id": "score",
+      "label": "Store_Score__cio",
+      "endpointIds": [
+        "ep-total",
+        "ep-store"
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "ep-total",
+      "groupId": "score",
+      "nodeId": "out-total",
+      "label": "total_sales__c",
+      "technicalLabel": "Measure",
+      "order": 1
+    },
+    {
+      "id": "ep-store",
+      "groupId": "score",
+      "nodeId": "out-store",
+      "label": "store_id__c",
+      "technicalLabel": "Dimension",
+      "order": 2
+    }
+  ],
+  "nodes": [
+    {
+      "id": "st-store",
+      "label": "Store_Stream",
+      "role": "source",
+      "layerId": "source",
+      "groups": [
+        "score"
+      ],
+      "description": "Store data stream.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-stream"
+      ]
+    },
+    {
+      "id": "st-sale",
+      "label": "Sale_Stream",
+      "role": "source",
+      "layerId": "source",
+      "groups": [
+        "score"
+      ],
+      "description": "Sale data stream.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-stream"
+      ]
+    },
+    {
+      "id": "dlo-store",
+      "label": "Store__dll",
+      "role": "dlo",
+      "layerId": "dlo",
+      "groups": [
+        "score"
+      ],
+      "description": "Store data lake object.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-stream",
+        "e-map-store"
+      ]
+    },
+    {
+      "id": "dlo-sale",
+      "label": "Sale__dll",
+      "role": "dlo",
+      "layerId": "dlo",
+      "groups": [
+        "score"
+      ],
+      "description": "Sale data lake object.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-stream",
+        "e-map-sale"
+      ]
+    },
+    {
+      "id": "f-store-id",
+      "label": "Store.Id__c",
+      "role": "dmo",
+      "layerId": "dmo",
+      "groups": [
+        "score"
+      ],
+      "description": "Grouping key.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-map-store"
+      ]
+    },
+    {
+      "id": "f-sale-store",
+      "label": "Sale.StoreId__c",
+      "role": "dmo",
+      "layerId": "dmo",
+      "groups": [
+        "score"
+      ],
+      "description": "Join key to the store.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-map-sale"
+      ]
+    },
+    {
+      "id": "f-sale-amt",
+      "label": "Sale.Amount__c",
+      "role": "dmo",
+      "layerId": "dmo",
+      "groups": [
+        "score"
+      ],
+      "description": "Sale amount.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-map-sale"
+      ]
+    },
+    {
+      "id": "ci",
+      "label": "Store_Score__cio",
+      "role": "ci",
+      "layerId": "ci",
+      "groups": [
+        "score"
+      ],
+      "description": "Sums sales per store.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-sql",
+        "e-meta"
+      ]
+    },
+    {
+      "id": "out-total",
+      "label": "total_sales__c",
+      "role": "derived_field",
+      "layerId": "output",
+      "groups": [
+        "score"
+      ],
+      "description": "SUM(Sale.Amount__c).",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-sql",
+        "e-meta"
+      ]
+    },
+    {
+      "id": "out-store",
+      "label": "store_id__c",
+      "role": "derived_field",
+      "layerId": "output",
+      "groups": [
+        "score"
+      ],
+      "description": "Store.Id__c, the grouping key.",
+      "claimStatus": "verified",
+      "evidenceIds": [
+        "e-sql",
+        "e-meta"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "c1",
+      "from": "st-store",
+      "to": "dlo-store",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-stream"
+      ]
+    },
+    {
+      "id": "c2",
+      "from": "st-sale",
+      "to": "dlo-sale",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-stream"
+      ]
+    },
+    {
+      "id": "c3",
+      "from": "dlo-store",
+      "to": "f-store-id",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-map-store"
+      ]
+    },
+    {
+      "id": "c4",
+      "from": "dlo-sale",
+      "to": "f-sale-store",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-map-sale"
+      ]
+    },
+    {
+      "id": "c5",
+      "from": "dlo-sale",
+      "to": "f-sale-amt",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-map-sale"
+      ]
+    },
+    {
+      "id": "c6",
+      "from": "f-store-id",
+      "to": "ci",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-sql"
+      ]
+    },
+    {
+      "id": "c7",
+      "from": "f-sale-store",
+      "to": "ci",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-sql"
+      ]
+    },
+    {
+      "id": "c8",
+      "from": "f-sale-amt",
+      "to": "ci",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-sql"
+      ]
+    },
+    {
+      "id": "c9",
+      "from": "ci",
+      "to": "out-total",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-sql",
+        "e-meta"
+      ]
+    },
+    {
+      "id": "c10",
+      "from": "ci",
+      "to": "out-store",
+      "type": "data_flow",
+      "groups": [
+        "score"
+      ],
+      "evidenceIds": [
+        "e-sql",
+        "e-meta"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "e-sql",
+      "kind": "ci_sql",
+      "artifact": "Store_Score__cio",
+      "verifiedAt": "2026-08-01T12:00:00Z",
+      "status": "verified"
+    },
+    {
+      "id": "e-meta",
+      "kind": "ci_metadata",
+      "artifact": "Store_Score__cio",
+      "verifiedAt": "2026-08-01T12:00:00Z",
+      "status": "verified"
+    },
+    {
+      "id": "e-map-store",
+      "kind": "dlo_dmo_mapping",
+      "artifact": "Store__dll to Store__dlm",
+      "verifiedAt": "2026-08-01T12:00:00Z",
+      "status": "verified"
+    },
+    {
+      "id": "e-map-sale",
+      "kind": "dlo_dmo_mapping",
+      "artifact": "Sale__dll to Sale__dlm",
+      "verifiedAt": "2026-08-01T12:00:00Z",
+      "status": "verified"
+    },
+    {
+      "id": "e-stream",
+      "kind": "dlo_metadata",
+      "artifact": "Store_Stream, Sale_Stream",
+      "verifiedAt": "2026-08-01T12:00:00Z",
+      "status": "verified"
+    }
+  ]
+}

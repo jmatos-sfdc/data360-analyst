@@ -21,7 +21,7 @@ data360-analyst/
 │   ├── data360-client-report/ Assemble findings into client deliverable
 │   ├── data360-transform-audit/ Audit Data Transform DAGs
 │   ├── data360-dpe-review/ Review DPE/Data Action configurations
-│   ├── data360-provenance-report/ Build/validate interactive DPE provenance reports
+│   ├── data360-provenance-report/ Build/validate interactive DPE or CI provenance reports
 │   ├── data360-html-export/ Convert markdown reports to self-contained HTML
 │   └── data360-setup/     Set up a project folder for one org (init-project + intake)
 ├── pyproject.toml         Package metadata + `data360` console entry point
@@ -92,7 +92,7 @@ Use skills by name:
 | `/data360-client-report` | Assemble findings into a client-shippable deliverable |
 | `/data360-transform-audit` | Audit Data Transform DAGs — dedup grain, formula patterns |
 | `/data360-dpe-review` | Review DPE/Data Action configurations — field mappings, upsert keys |
-| `/data360-provenance-report` | Build, validate, enrich, or upgrade an interactive DPE provenance report |
+| `/data360-provenance-report` | Build, validate, enrich, or upgrade an interactive DPE or CI provenance report |
 | `/data360-html-export` | Convert any markdown report to self-contained HTML |
 | `/data360-setup` | Set up a project folder for one org: auth check, CLAUDE.md, MCP server, intake, first findings |
 
