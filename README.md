@@ -10,7 +10,7 @@ Most Data 360 tooling is for builders — admins shipping segments, activations,
 
 1. **See it work, no org, no auth** — `./setup.sh && .venv/bin/data360 demo` (30 seconds — [below](#try-it-in-30-seconds--no-org-no-auth)).
 2. **Point it at your org** — authenticate, then `data360 analyze <alias>` prints the high-value answers straight to your terminal ([Quick start](#quick-start)).
-3. **Ask in plain English** — register the MCP server and drive the whole toolkit from Claude Code ([Quick start](#quick-start)).
+3. **Ask in plain English** — open Claude Code in a project folder and say "set up data360 analyst for this project, org <alias>" ([Quick start](#quick-start)).
 4. **Persist and share** — `data360 intake` snapshots the org to disk; `data360 dashboard` builds a shareable single-file HTML report.
 
 **Contents:** [Try it in 30s](#try-it-in-30-seconds--no-org-no-auth) · [Why it's different](#why-its-different) · [Quick start](#quick-start) · [What it looks like](#what-it-looks-like) · [What it surfaces](#what-it-surfaces) · [Interactive reports](#interactive-reports) · [Skills](#skills) · [MCP tools](#mcp-tool-catalog) · [CLI reference](#using-the-cli-directly) · [How it works](#how-it-works) · [Troubleshooting](#troubleshooting)
@@ -84,31 +84,29 @@ Before you install, here's the whole request path — you ask in plain English, 
 ```bash
 git clone https://github.com/jmatos-sfdc/data360-analyst
 cd data360-analyst
-python3 -m venv .venv
-.venv/bin/pip install -e .
+./setup.sh          # venv, editable install, `data360` on your PATH, skills linked into ~/.claude/skills
 
 # Authenticate to a Data 360 org (one-time per org)
 sf org login web --instance-url https://<your-instance>.my.salesforce.com --alias <alias>
-
-# Register the MCP server with Claude Code. Name it d360-<alias> — the d360-
-# prefix keeps it distinct from the `data360` CLI command, and the org alias
-# suffix lets you register one server per org (e.g. d360-prod, d360-uat).
-claude mcp add d360-<alias> \
-    "$(pwd)/.venv/bin/python" \
-    -m data360_analyst.mcp_server \
-    --org <alias>
 ```
 
-That's it. Open Claude Code and start asking questions. The toolkit ships with a `CLAUDE.md` and [Skills](https://docs.anthropic.com/en/docs/claude-code/skills) that teach Claude how to use every tool — you don't need to learn the CLI flags or script names.
+Then make a folder for the project, open Claude Code in it and ask:
 
-To run the `data360` command yourself (see [Using the CLI directly](#using-the-cli-directly)), activate the virtualenv first — `source .venv/bin/activate` — or call `.venv/bin/data360` directly. It isn't installed globally.
-
-Want `data360` on your PATH everywhere without activating a venv? Use [pipx](https://pipx.pypa.io/) instead of the venv steps above — it installs into its own isolated environment and just exposes the command:
-
-```bash
-pipx install -e .
-data360 --help
+```text
+mkdir -p ~/Projects/clients/<client>/Data360 && cd $_ && claude
+> set up data360 analyst for this project, org <alias>
 ```
+
+The `data360-setup` skill checks auth (`data360 doctor`), writes a project `CLAUDE.md` and `.claude/settings.json`,
+registers the read-only MCP server for that folder only (`claude mcp add --scope local`, `--data-dir` set to the
+folder), snapshots the org into it (`data360 intake`, a few minutes) and reports the top findings. Restart Claude Code
+once afterwards so the MCP server loads; questions answered from the snapshot work before that.
+
+The same steps by hand: `data360 init-project . --org <alias>` then `data360 intake --org <alias> --output-dir .`.
+`data360 install-skills` re-links the skills if you move the clone (`--copy` copies them instead of linking).
+
+If `data360` isn't found after setup, add `~/.local/bin` to your PATH or call `.venv/bin/data360` directly. Prefer
+[pipx](https://pipx.pypa.io/)? `pipx install -e .` exposes the command without a venv, then run `data360 install-skills`.
 
 ### Verify it works
 
@@ -292,7 +290,7 @@ The toolkit ships with Claude Code Skills that let you invoke specific workflows
 | `/data360-dpe-review` | Review DPE/Data Action configurations — field mappings, upsert keys |
 | `/data360-provenance-report` | Build, validate, enrich, or upgrade an interactive DPE provenance report |
 | `/data360-html-export` | Generate a single-page HTML dashboard from all reports |
-| `/data360-setup` | Install dependencies, register MCP server, add a new client |
+| `/data360-setup` | Set up a project folder for one org: auth check, CLAUDE.md, MCP server, intake, first findings |
 
 ## MCP tool catalog
 

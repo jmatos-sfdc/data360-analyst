@@ -25,12 +25,11 @@ scoring signals, but doesn't reimplement or modify any of audit's correctness-tr
 
 - Intake must have been run first (needs `queries/*.sql` for every CI in scope — cross-CI
   duplication needs to see the upstream CIs too, same requirement as `data360-ci-audit`)
-- Virtualenv set up: `cd ~/data360-analyst && source .venv/bin/activate`
+- `data360` on PATH (run the repo's `setup.sh` once; `data360 doctor` checks it)
 
 ## Run
 
 ```bash
-source ~/data360-analyst/.venv/bin/activate
 data360 ci-complexity --output-dir ~/Projects/clients/<client>/Data360
 ```
 

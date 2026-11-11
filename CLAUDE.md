@@ -23,9 +23,9 @@ data360-analyst/
 │   ├── data360-dpe-review/ Review DPE/Data Action configurations
 │   ├── data360-provenance-report/ Build/validate interactive DPE provenance reports
 │   ├── data360-html-export/ Convert markdown reports to self-contained HTML
-│   └── data360-setup/     Install, register MCP, add client
+│   └── data360-setup/     Set up a project folder for one org (init-project + intake)
 ├── pyproject.toml         Package metadata + `data360` console entry point
-├── setup.sh               One-command install: create .venv, `pip install -e .`, print next step
+├── setup.sh               One-command install: create .venv, `pip install -e .`, link `data360` into ~/.local/bin, `data360 install-skills`
 ├── src/data360_analyst/
 │   ├── cli.py             `data360 <subcommand>` dispatcher + `data360 demo` (full offline pipeline on examples/demo-org) + `data360 analyze`
 │   ├── analyze.py             Answer-first layer — backbone DMOs, orphans, suspect CIs, IR over-merge rules, flow-to-activation from a snapshot; powers `data360 analyze`
@@ -47,6 +47,7 @@ data360-analyst/
 │   ├── compare_provenance_reports.py  Diffs two provenance configs/reports
 │   ├── export_sql_csv.py      Full DC SQL result → CSV, past the QE 1000 / ~90k single-response row caps (offset pagination)
 │   ├── mcp_server.py          Local FastMCP server wrapping /ssot/* endpoints
+│   ├── project_setup.py       `data360 install-skills` (link skills into ~/.claude/skills) + `data360 init-project` (project CLAUDE.md, settings, local-scope MCP)
 │   ├── doctor.py              data360 doctor — env/auth diagnostics; reports which sf token path applies
 │   └── sf_auth.py             Shared sf CLI auth helper (handles 2026-05-27 credential-redaction change)
 ├── requirements.txt       sqlglot, pyyaml, fastmcp, markdown (pinned; pyproject.toml is the install source of truth)
@@ -93,7 +94,7 @@ Use skills by name:
 | `/data360-dpe-review` | Review DPE/Data Action configurations — field mappings, upsert keys |
 | `/data360-provenance-report` | Build, validate, enrich, or upgrade an interactive DPE provenance report |
 | `/data360-html-export` | Convert any markdown report to self-contained HTML |
-| `/data360-setup` | Install dependencies, register MCP server, add a new client |
+| `/data360-setup` | Set up a project folder for one org: auth check, CLAUDE.md, MCP server, intake, first findings |
 
 ## Per-client folder layout
 

@@ -21,7 +21,7 @@ Snapshot a Data Cloud org to disk in one command. Produces a diffable, version-c
 ## Prerequisites
 
 - Salesforce CLI authenticated to the target org (`sf org login web --alias <alias>`)
-- Virtualenv set up: `cd ~/data360-analyst && source .venv/bin/activate`
+- `data360` on PATH (run the repo's `setup.sh` once; `data360 doctor` checks it)
 
 ## Output location
 
@@ -30,7 +30,6 @@ If the user hasn't already specified `--output-dir`, ask where the snapshot shou
 ## Run
 
 ```bash
-source ~/data360-analyst/.venv/bin/activate
 data360 intake --org <sf-alias> --output-dir ~/Projects/clients/<client>/Data360
 ```
 

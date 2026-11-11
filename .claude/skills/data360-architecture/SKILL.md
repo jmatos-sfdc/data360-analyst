@@ -19,7 +19,7 @@ Understand the structure of a Data Cloud org — which objects are load-bearing,
 
 - Intake must have been run first (needs `object-model/` YAML sidecars on disk)
 - MCP server registered for live queries (optional but recommended for ad-hoc follow-up)
-- Virtualenv activated: `source ~/data360-analyst/.venv/bin/activate`
+- `data360` on PATH (run the repo's `setup.sh` once; `data360 doctor` checks it)
 
 ## Tools
 
@@ -28,7 +28,7 @@ Understand the structure of a Data Cloud org — which objects are load-bearing,
 Ranks DMOs by how many CIs and segments read from them. Identifies backbone DMOs (high fan-in, many downstream consumers) vs leaf detail objects (used by 1-2 CIs).
 
 ```bash
-~/data360-analyst/.venv/bin/data360 dmo-graph \
+data360 dmo-graph \
   --org <alias> \
   --output-dir ~/Projects/clients/<Client>/Data360
 ```
@@ -45,7 +45,7 @@ Writes `reports/dmo-graph.md`. Key output:
 Zooms into one DMO and clusters all CIs that read from it by naming pattern, join shape, and output measures.
 
 ```bash
-~/data360-analyst/.venv/bin/data360 cluster-cis \
+data360 cluster-cis \
   --dmo <dmo_api_name> \
   --output-dir ~/Projects/clients/<Client>/Data360
 ```
@@ -62,7 +62,7 @@ Writes `reports/cis-on-<dmo>.md`. Key output:
 Matches a Lucidchart "canonical pipeline" diagram (Document JSON export) against the on-disk inventory. Flags orphans on both sides.
 
 ```bash
-~/data360-analyst/.venv/bin/data360 diagram-crosscheck \
+data360 diagram-crosscheck \
   --diagram /path/to/diagram.json \
   --output-dir ~/Projects/clients/<Client>/Data360
 ```

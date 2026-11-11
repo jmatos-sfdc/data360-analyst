@@ -614,7 +614,9 @@ def count_only(org_alias):
 
 
 def generate(org_alias, output_dir, skip_streams=False, incremental=False):
-    client_name = Path(output_dir).parent.name
+    resolved = Path(output_dir).expanduser().resolve()
+    # <client>/Data360 -> "<client>"; a project folder that is the snapshot itself -> its own name
+    client_name = resolved.parent.name if resolved.name == "Data360" else resolved.name
     print(f"Authenticating as '{org_alias}'...")
     token, instance_url = get_token(org_alias)
     print(f"  Instance: {instance_url}")

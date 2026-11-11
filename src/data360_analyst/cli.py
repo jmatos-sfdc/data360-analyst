@@ -145,8 +145,16 @@ def main():
         _analyze(sys.argv[2:])
         return
 
+    if len(sys.argv) >= 2 and sys.argv[1] in ("install-skills", "init-project"):
+        from data360_analyst import project_setup
+
+        entry = {"install-skills": project_setup.main_install_skills,
+                 "init-project": project_setup.main_init_project}[sys.argv[1]]
+        entry(sys.argv[2:])
+        return
+
     if len(sys.argv) < 2 or sys.argv[1] not in _MODULES:
-        names = ", ".join(["analyze", "demo", *sorted(_MODULES)])
+        names = ", ".join(["analyze", "demo", "init-project", "install-skills", *sorted(_MODULES)])
         print(
             f"usage: data360 <subcommand> [args...]\n\navailable subcommands: {names}",
             file=sys.stderr,

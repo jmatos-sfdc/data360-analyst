@@ -17,12 +17,11 @@ Parse each CI's SQL with sqlglot and check for known correctness traps and redun
 ## Prerequisites
 
 - Intake must have been run first (needs `queries/*.sql` files on disk for every CI in scope, including dependencies — the cross-CI check needs to see the upstream CIs)
-- Virtualenv set up: `cd ~/data360-analyst && source .venv/bin/activate`
+- `data360` on PATH (run the repo's `setup.sh` once; `data360 doctor` checks it)
 
 ## Run
 
 ```bash
-source ~/data360-analyst/.venv/bin/activate
 data360 ci-audit --output-dir ~/Projects/clients/<client>/Data360
 
 # Audit + auto-fix in one shot — adds queries-converted/ + reports/ci-convert.md

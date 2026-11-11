@@ -1,87 +1,82 @@
 ---
 name: data360-setup
-description: Set up the data360-analyst toolkit — install dependencies, register the MCP server, or add a new client. Use when user asks to "set up data360", "register MCP server", "add new client", or "install data360".
+description: Set up the current folder as a Data 360 analysis project for one org — check auth, write the project CLAUDE.md and permissions, register the data360 MCP server for this folder, snapshot the org, and report what it found. Use when the user asks to "set up data360 analyst for this project", "set up data360", "start a Data 360 project", "add a new client", "register the MCP server", or "install data360".
 triggers:
   - "set up data360"
   - "setup data360"
-  - "register MCP"
+  - "set up data360 analyst"
+  - "start a data 360 project"
   - "add new client"
+  - "register MCP"
   - "install data360"
-  - "add MCP server"
 ---
 
-# Data360 Setup
+# Set up a Data 360 project
 
-## First-time install
+The project folder is the current working directory unless the user names another. One folder per org. For client
+work the convention is `~/Projects/clients/<client>/Data360`; if the current folder is somewhere else and looks
+unrelated (a home directory, a repo of other code), ask before writing into it.
 
-```bash
-cd ~/data360-analyst
-python3 -m venv .venv
-.venv/bin/pip install -e .
-```
+You need the **org alias**. If the user didn't give one, run `sf org list --json` and ask which alias to use. Never
+log in for them; if the org isn't authenticated, tell them to run `! sf org login web --alias <alias>` and stop.
 
-## Authenticate to a Salesforce org
-
-```bash
-sf org login web --instance-url https://<instance>.my.salesforce.com --alias <alias>
-```
-
-## Register the MCP server
-
-Register once per machine per org. This lets any MCP-aware AI client (Claude Code, Cursor, etc.) call the Data Cloud tools interactively.
+## 1. Check the toolkit and auth
 
 ```bash
-claude mcp add data360 \
-    ~/data360-analyst/.venv/bin/python \
-    -m data360_analyst.mcp_server \
-    --org <alias> \
-    --data-dir ~/Projects/clients/<client>/Data360
+data360 doctor --org <alias>
 ```
 
-`--data-dir` points at the client's `Data360/` folder (parent of `object-model/`) and is required for the lineage tools (`lineage_summary`, `get_upstream`, `get_downstream`, `shortest_path`, `find_orphans`). Other tools work without it. The flag and the legacy `D360_ANALYST_DATA_DIR` env var are equivalent — pass either.
+- `data360: command not found`: the toolkit isn't installed. Tell the user to clone
+  `https://github.com/jmatos-sfdc/data360-analyst` and run its `setup.sh` (which also links these skills), then stop.
+- Any FAIL line on auth or the Data Cloud API: show it and stop. Don't continue on a broken org connection.
 
-The server shells out to the sf CLI on every call to get a fresh token (`sf org auth show-access-token` on sf CLI versions released after May 27, 2026; `sf org display` on older versions) — no refresh-token dance, reuses existing `sf` auth. Adds ~200-400ms per call.
+## 2. Write the project files and register the MCP server
 
-For multi-org work, register multiple servers with different aliases and names:
 ```bash
-claude mcp add data360-uat \
-    ~/data360-analyst/.venv/bin/python \
-    -m data360_analyst.mcp_server \
-    --org <uat-alias> \
-    --data-dir ~/Projects/clients/<client>/Data360
+data360 init-project . --org <alias>
 ```
 
-## Available MCP tools
+This writes `CLAUDE.md` (where the snapshot lives, answer from the snapshot first, go live only when asked) and
+`.claude/settings.json` (pre-approves `data360` commands and the MCP tools, blocks hand edits to `object-model/`), and
+registers the `data360` MCP server for this folder only (`claude mcp add --scope local`, with `--data-dir` set to this
+folder so the lineage tools work). Existing `CLAUDE.md` or settings files are kept; pass `--force` only if the user
+asks to overwrite them. If the folder already has a `CLAUDE.md` of its own, offer to append the Data 360 section rather
+than replacing it.
 
-Once registered, the AI client can call:
+## 3. Snapshot the org
 
-- **Object model:** `list_dmos`, `get_dmo`, `get_dmo_relationships`
-- **DLOs & mappings:** `list_dlos`, `get_dlo`, `list_dlo_mappings`, `get_dlo_mapping`
-- **Calculated Insights:** `list_cis`, `get_ci_metadata`, `get_ci_sql`, `get_ci_rows`
-- **Data Transforms:** `list_transforms`, `get_transform`
-- **DPE / Data Actions:** `list_dpes`, `get_dpe`
-- **Streams, Segments, Activations:** `list_streams`, `list_segments`, `list_activations`
-- **Identity Resolution:** `list_ir_rulesets`
-- **SQL:** `run_sql`, `get_sql_rows`
-- **Lineage** (require `--data-dir`): `lineage_summary`, `get_upstream`, `get_downstream`, `shortest_path`, `find_orphans`
-
-All read-only — no create/update/delete tools are registered.
-
-## Add a new client
-
-1. Create the folder structure:
 ```bash
-mkdir -p ~/Projects/clients/<client>/Data360/{queries,reports,transforms,segments}
+data360 intake --org <alias> --output-dir .
 ```
 
-2. Create `config.md` using an existing client's `config.md` as a template. Fill in: org alias, instance URL, known DMOs, join paths, CI inventory.
+Takes a few minutes on a small org (streams and lineage are the slow part); tell the user that before starting. Add
+`--incremental` on a re-run. `--skip-streams` makes it faster at the cost of stream lineage.
 
-3. Run intake to generate the object model:
+## 4. Run the static checks and report
+
+Intake already ran the CI audit. Add the complexity scores and the dashboard, then the answers:
+
 ```bash
-source ~/data360-analyst/.venv/bin/activate
-data360 intake --org <alias> --output-dir ~/Projects/clients/<client>/Data360
+data360 ci-complexity --output-dir .
+data360 dashboard --data-dir .
+data360 analyze --snapshot .
 ```
+
+Report back in a few lines, not a dump:
+
+- Counts from `object-model/index.yaml` (DMOs, CIs, segments, activations, IR rulesets).
+- The top two or three findings from `analyze` (suspect CIs, over-merging match rules, orphans), each in one line.
+- Where things are: `reports/dashboard.html`, `reports/ci-audit.md`.
+- **The MCP server loads on the next Claude Code start.** Questions answered from the snapshot work now; live
+  questions (row counts, `run_sql`, job status) need a restart (`/exit`, then `claude` in this folder).
+
+## MCP tools (after restart)
+
+All read-only. Object model (`list_dmos`, `get_dmo`, `get_dmo_relationships`), DLOs and mappings, Calculated Insights
+(`list_cis`, `get_ci_sql`, `get_ci_rows`), transforms, DPEs, streams, segments, activations, `list_ir_rulesets`, SQL
+(`run_sql`, `get_sql_rows`), and lineage (`lineage_summary`, `get_upstream`, `get_downstream`, `shortest_path`,
+`find_orphans`). A second org gets its own project folder; don't register two orgs in one folder.
 
 ## Containment rule
 
-Per-client output goes under `~/Projects/clients/<client>/Data360/`. This repo stays tool-only — code + docs, no client data.
+Everything for this org stays in this project folder. Never write snapshot output into the toolkit repo.
