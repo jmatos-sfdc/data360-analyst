@@ -346,7 +346,7 @@ data360 ci-complexity --output-dir ~/data360/<client>
 data360 dashboard --data-dir ~/data360/<client> --client "<client>"
 ```
 
-All 20 subcommands — including `ci-complexity`, `ci-convert`, `dmo-graph`, `lineage-graph`, `diagram-crosscheck`, `ci-visualize`, the `provenance-*` family, and `export-sql-csv` — plus which ones need a live org and the full command cookbook, live in **[docs/reference.md](docs/reference.md#using-the-cli-directly)**. Every subcommand is also reachable as `python -m data360_analyst.<module>`.
+All 23 subcommands — including `ci-complexity`, `ci-convert`, `dmo-graph`, `lineage-graph`, `diagram-crosscheck`, `ci-visualize`, the `provenance-*` family, and `export-sql-csv` — plus which ones need a live org and the full command cookbook, live in **[docs/reference.md](docs/reference.md#using-the-cli-directly)**. Every subcommand is also reachable as `python -m data360_analyst.<module>`.
 
 ## How it works
 
