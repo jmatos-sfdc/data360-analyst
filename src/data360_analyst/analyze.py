@@ -236,6 +236,8 @@ def analyze_snapshot(data_dir):
         "suspectCis": suspect_cis(audit_results),
         "flows": flow_to_activations(graph),
         "overMerge": over_merge_rules(data_dir),
+        "segmentLabels": {n["name"]: n["label"] for n in graph.get("nodes", [])
+                          if n["type"] == "Segment" and n.get("label")},
     }
 
 
@@ -278,11 +280,15 @@ def _render_suspects(answers):
 def _render_flows(answers):
     lines = ["## Flow to activation"]
     rows = answers["flows"]
+    # Segment apiNames are fixed at creation and can be unreadable (a login
+    # email slug); the display name is what people recognize.
+    labels = answers.get("segmentLabels") or {}
     if not rows:
         return lines + ["- no activations in this snapshot", ""]
     for fl in rows:
         if fl["path"]:
-            lines.append(f"- {fl['activation']}: {' -> '.join(fl['path'])}")
+            names = [labels.get(n, n) for n in fl["path"]]
+            lines.append(f"- {fl['activation']}: {' -> '.join(names)}")
         else:
             lines.append(f"- {fl['activation']}: no traced source path")
     lines.append("")

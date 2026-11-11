@@ -127,3 +127,9 @@ def test_ask_routes_identity_question_to_over_merge(tmp_path):
     out = analyze.render_answers(analyze.analyze_snapshot(snap), "which match rules over-merge?")
     assert "## Identity resolution over-merge risk" in out
     assert "R / Rule" in out
+
+
+def test_flow_prints_segment_display_name():
+    answers = {"flows": [{"activation": "A", "path": ["S", "seg_api", "A"]}],
+               "segmentLabels": {"seg_api": "Audience"}}
+    assert "S -> Audience -> A" in "\n".join(analyze._render_flows(answers))
