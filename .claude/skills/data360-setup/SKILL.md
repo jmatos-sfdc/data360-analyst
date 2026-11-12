@@ -54,10 +54,12 @@ Takes a few minutes on a small org (streams and lineage are the slow part); tell
 
 ## 4. Run the static checks and report
 
-Intake already ran the CI audit. Add the complexity scores and the dashboard, then the answers:
+Intake already ran the CI audit. Add the complexity scores, the lineage graph (the dashboard's Lineage tab and the
+MCP lineage tools read `object-model/lineage.yaml`), and the dashboard, then the answers:
 
 ```bash
 data360 ci-complexity --output-dir .
+data360 lineage-graph --output-dir .
 data360 dashboard --data-dir .
 data360 analyze --snapshot .
 ```
